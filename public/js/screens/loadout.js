@@ -576,7 +576,7 @@ function LoadoutScreen({ st }) {
   const openExport = () => setIo(tab === 'ownership'
     ? { mode: 'export', kind: 'ownership', text: serializeOwnership(loadoutStore.get().notOwned) }
     : tab === 'diy' ? { mode: 'export', kind: 'diy', text: serializeDiy(loadoutStore.get().diy) }
-      : { mode: 'export', kind: 'loadout', text: serializeExport(loadoutStore.get().entries, { ops: loadoutStore.get().ops }) });
+      : { mode: 'export', kind: 'loadout', text: serializeExport(loadoutStore.get().entries, { ops: loadoutStore.get().ops, diy: loadoutStore.get().diy }) });
   const openImport = () => setIo({ mode: 'import', kind: tab, text: '' });
   const ioCopy = async () => {
     const ok = await copyText(ioText);
@@ -621,17 +621,27 @@ function LoadoutScreen({ st }) {
     // them and still save, clearing a 练度 the file did not mean to erase (GitHub #538).
     const opsRefused = loadoutOpsImportRefusal(res.ops, ready);
     if (opsRefused) { toast(opsRefused.text, opsRefused.tone); return; }
+    const diyRefused = res.diy === undefined ? null : importRefusal('diy', ready);
+    if (diyRefused) { toast(diyRefused.text, diyRefused.tone); return; }
+    if (res.diy && Object.keys(res.diy).length && !Array.isArray(loadoutStore.get().diyKitted)) {
+      toast(t('干员数据仍在载入，请稍候再导入'), 'warn'); return;
+    }
     // 0.2.2: a payload with `ops` replaces the 潜能 / 练度 too (an older export leaves them alone)
     const opIds = res.ops ? cultivationCharIds(data.get('chess'), data.get('backups')) : null;
-    const r = applyLoadoutEntries(res.entries, getChess, res.ops ? { ops: res.ops, isOperator: (id) => opIds.has(id) } : {});
+    const r = applyLoadoutEntries(res.entries, getChess, {
+      ...(res.ops ? { ops: res.ops, isOperator: (id) => opIds.has(id) } : {}),
+      ...(res.diy === undefined ? {} : { diy: res.diy, diyData: diyData(), kitted: loadoutStore.get().diyKitted || [] }),
+    });
     const { applied, dropped } = r;
     const nOps = r.ops ?? 0;
     // nothing survived sanitising (unknown chess, or every choice already the default): keep the current loadout
-    if (!applied && !nOps) { toast(t('导入失败：这份数据在当前版本没有可用的调配，未做任何改动'), 'error'); return; }
+    if (!applied && !nOps && !r.diyApplied) { toast(t('导入失败：这份数据在当前版本没有可用的调配，未做任何改动'), 'error'); return; }
     setIo(null);
-    toast(!applied ? t('已导入 {n} 名干员的潜能与练度', { n: nOps })
+    const loadoutText = !applied ? (nOps ? t('已导入 {n} 名干员的潜能与练度', { n: nOps }) : '')
       : dropped ? t('已导入 {applied} 名干员（另有 {dropped} 项未导入）', { applied, dropped })
-        : t('已导入 {applied} 名干员的调配', { applied }), dropped ? 'warn' : 'success');
+        : t('已导入 {applied} 名干员的调配', { applied });
+    const diyText = r.diyApplied ? (r.diy ? t('已导入 {n} 个自选名额', { n: r.diy }) : t('已导入：全部名额为空')) : '';
+    toast([loadoutText, diyText].filter(Boolean).join(' · '), dropped ? 'warn' : 'success');
   };
 
   // Esc closes; ←/→ browse the filtered roster (not while typing in the search field)
@@ -710,7 +720,7 @@ function LoadoutScreen({ st }) {
         ${inMatch && hasDeadline(infoDeadline) ? html`<${Countdown} deadline=${infoDeadline} size="sm" gauge=${false} label=${t('调配截止')} class="lo-deadline" />` : null}
         ${syncText ? html`<span class=${cx('lo-sync', syncCls)} role="status">${t(syncText)}</span>` : null}
         <span class="lo-count">${t('已调整')} <b class="num">${nChanged}</b><span class="num t-dim">/${roster.length}</span></span>
-        <${Button} variant="ghost" size="sm" data-testid="loadout-export" disabled=${!nChanged && !Object.keys(st.ops || {}).length} onClick=${openExport} title=${t('导出当前调配（可复制或下载）')}>${t('导出')}<//>
+        <${Button} variant="ghost" size="sm" data-testid="loadout-export" disabled=${!nChanged && !Object.keys(st.ops || {}).length && !nDiy} onClick=${openExport} title=${t('导出当前调配（可复制或下载）')}>${t('导出')}<//>
         <${Button} variant="ghost" size="sm" data-testid="loadout-import" disabled=${!ready} onClick=${openImport} title=${t('导入调配（粘贴或选择文件）')}>${t('导入')}<//>
         <${Button} variant="secondary" size="sm" icon="refresh" disabled=${!nChanged} onClick=${resetAll}>${t('全部恢复默认')}<//>
       </div>`}
@@ -767,6 +777,7 @@ function LoadoutScreen({ st }) {
         : io.mode === 'export'
           ? html`${tParts('共 {n} 名干员已调整。复制或下载这份数据，即可在别的设备或浏览器上导入。', { n: html`<b class="num">${nChanged}</b>`, count: nChanged })}`
           : html`${t('把导出的内容粘贴到下方，或点「选择文件」。')}${nChanged ? html`${tParts('导入会{overwrite}当前的 {nChanged} 名干员调配。', { overwrite: html`<strong>${t('覆盖')}</strong>`, nChanged })}` : null}`}</p>
+      ${!ioOwn && !ioDiy ? html`<p class="lo-io__hint">${t('调配文件同时包含四个自选位、技能、模组及潜能练度；旧文件不改变自选位。')}</p>` : null}
       <textarea class="lo-io__text" data-testid="loadout-io-text" spellcheck=${false} readOnly=${io.mode === 'export'} value=${ioText}
         placeholder=${io.mode === 'export' ? '' : ioDiy ? t('在此粘贴导出的自选编队内容…') : ioOwn ? t('在此粘贴导出的干员持有内容…') : t('在此粘贴导出的调配内容…')}
         onInput=${(e) => setIo({ ...io, text: e.currentTarget.value })}></textarea>

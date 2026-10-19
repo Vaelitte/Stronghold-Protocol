@@ -155,7 +155,7 @@ const ICE_FRAME = 0x9fe6ff;
 /** How long a view waits for its avatar before showing the image-less placeholder diamond. */
 const PIC_WAIT_MS = 400;
 /**
- * Waits (ms, real time) before a view loads its Spine model again after the load failed or timed out (assets.js, 20 s)
+ * Waits (ms, real time) before a view loads its Spine model again after the load failed or timed out (assets.js, 60 s)
  * — bounded: after the last one the view keeps its diamond until `retryAssets` (a manifest that arrived late, the tab
  * shown again). Counted from the failure; a hidden tab runs no frames, so nothing is retried while hidden.
  */

@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createAssetNetwork } from '../../public/js/assetNetwork.js';
 import {
   avatarUrl, portraitUrl, enemyIconUrl, tokenAvatarUrl, bondIconUrl, bandIconUrl, itemIconUrl, skillIconUrl, uiUrl,
   profIconUrl, subProfIconUrl, spineEntry, hasBackSpine, unitPictureUrl, bgmEntry, sfxUrl, unitSfxUrl, baseCharId,
@@ -504,7 +505,7 @@ describe('createAssets store', () => {
   test('image cache + preload progress (failures resolve to null)', async () => {
     const loaded = [];
     let fail = true;
-    const a = createAssets({ manifest: M, loadImage: async (u) => { loaded.push(u); if (u.includes('bad') && fail) throw new Error('x'); return { src: u }; } });
+    const a = createAssets({ manifest: M, imageNetwork: createAssetNetwork({ retryDelays: [] }), loadImage: async (u) => { loaded.push(u); if (u.includes('bad') && fail) throw new Error('x'); return { src: u }; } });
     const progress = [];
     const r = await a.preload(['/a.png', '/bad.png', '/a.png', null, ''], (d, t) => progress.push([d, t]));
     assert.deepEqual(r, { ok: 1, failed: 1, total: 2 });

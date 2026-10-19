@@ -73,6 +73,7 @@ describe('loadout export includes DIY-only cultivation (real server, headless Ch
   }
 
   for (const [name, normal, patch] of [
+    ['DIY slots only', false, {}],
     ['DIY potential only', false, { potential: 1 }],
     ['DIY cultivation only', false, { cultivate: 0 }],
     ['DIY potential and cultivation', false, { potential: 1, cultivate: 0 }],
@@ -96,7 +97,7 @@ describe('loadout export includes DIY-only cultivation (real server, headless Ch
         if (normal) await changeNormal(c);
         await tab(c, 'loadout');
         const expected = await saved(c);
-        if (patch) assert.deepEqual(expected.ops[KALTS], patch);
+        if (patch && Object.keys(patch).length) assert.deepEqual(expected.ops[KALTS], patch);
         if (!normal) {
           assert.deepEqual(expected.entries, {});
           assert.match(await c.page.$eval('.lo-top__right', e => e.textContent), /已调整\s*0/);
@@ -111,14 +112,12 @@ describe('loadout export includes DIY-only cultivation (real server, headless Ch
         assert.equal(payload.v, 1);
         assert.equal(payload.count, normal ? 1 : 0, 'count retains its existing entry semantics');
         assert.deepEqual({ entries: payload.entries, ops: payload.ops }, expected);
+        const expectedDiy = await c.page.evaluate(() => JSON.parse(localStorage.getItem('sp.pref.diy') || '{}').picks || {});
+        assert.deepEqual(payload.diy, expectedDiy, 'the combined file includes the roster');
         await c.shot(`${name.replaceAll(' ', '-')}-exported`);
         target = await open(`${name} import`);
-        if (diyText) {
-          await tab(target, 'diy');
-          await importText(target, diyText, 'diy-import');
-          await tab(target, 'loadout');
-        }
         await importText(target, text);
+        assert.deepEqual(await target.page.evaluate(() => JSON.parse(localStorage.getItem('sp.pref.diy') || '{}').picks || {}), expectedDiy);
         assert.deepEqual(await saved(target), expected, 'a fresh browser keeps the complete exported loadout');
         await target.page.reload({ waitUntil: 'domcontentloaded' });
         await target.page.waitForSelector('.lobby-screen');
@@ -145,7 +144,7 @@ describe('loadout export includes DIY-only cultivation (real server, headless Ch
       assert.equal(await disabled(c, 'loadout-export'), true);
       await chooseKalts(c);
       await tab(c, 'loadout');
-      assert.equal(await disabled(c, 'loadout-export'), true, 'a roster choice alone is not loadout settings');
+      assert.equal(await disabled(c, 'loadout-export'), false, 'DIY picks alone enable the combined export');
       await setKalts(c, { potential: 1, cultivate: 0 });
       await changeNormal(c);
       await c.click('.lo-top__right button', '全部恢复默认');
@@ -161,7 +160,7 @@ describe('loadout export includes DIY-only cultivation (real server, headless Ch
       await setKalts(c, { potential: 6, cultivate: 3 });
       await tab(c, 'loadout');
       assert.deepEqual(await saved(c), { entries: {}, ops: {} });
-      assert.equal(await disabled(c, 'loadout-export'), true, 'back to defaults: nothing to export');
+      assert.equal(await disabled(c, 'loadout-export'), false, 'the DIY roster remains exportable with default cultivation');
       assert.deepEqual(c.problems.filter(p => p.startsWith('pageerror:')), []);
     } finally { await c?.close(); }
   });

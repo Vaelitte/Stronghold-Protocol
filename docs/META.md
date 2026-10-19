@@ -1078,4 +1078,6 @@ reconnectable, spectator-readable snapshot. Bots resolve immediately. Sources, b
 
 ## Personal fork observing
 
+Personal loadout export (2026-10-20): the optional `diy` field of a `stronghold.loadout` v1 envelope contains all four self-select slots, including operator/skill/module picks. The existing `ops` carries potential/cultivation. Missing `diy` in an older file preserves current picks; explicit `{}` clears them. Imported picks are checked against loaded data and the server's kit list before saving/syncing. A nonempty but wholly unavailable roster does not erase saved picks. See [PERSONAL.md](PERSONAL.md).
+
 The owner-requested rules in [PERSONAL.md](PERSONAL.md) allow observing while the own battle runs and across boss pairs. The own authoritative battle remains active off screen; reconnect restores it before sending the watched display.

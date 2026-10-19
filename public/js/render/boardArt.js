@@ -11,6 +11,8 @@
 // (board3d/load.js, which reads the manifest only) and this art share one download — also when the manifest lists
 // the WebP copy tools/local-extract writes and the table still names the PNG.
 
+import { fetchArt } from '../assetNetwork.js';
+
 let cached = null;
 
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -33,7 +35,7 @@ export function sourceUrl(assets, path) {
 /** @param {any} assets store of public/js/assets.js (needs local(), localUrl(), image()) */
 export function loadBoardArt(assets) {
   if (cached) return cached;
-  cached = (async () => {
+  const pending = (async () => {
     if (!assets || typeof assets.local !== 'function' || typeof assets.image !== 'function') return null;
     const manifest = await assets.local().catch(() => null);
     if (!manifest) return null;
@@ -42,20 +44,23 @@ export function loadBoardArt(assets) {
     const dir = atlasUrl.replace(/\/[^/]*$/, '');
     let tiles = null;
     try {
-      const res = await fetch(`${dir}/tiles.json`, { cache: 'no-cache' });
-      tiles = res.ok ? await res.json() : null;
+      tiles = await fetchArt(`${dir}/tiles.json`);
     } catch { tiles = null; }
     if (!isObj(tiles) || !isObj(tiles.materials) || !isObj(tiles.source)) return null;
     const images = {};
     await Promise.all(Object.entries(tiles.source).map(async ([k, s]) => {
       const url = isObj(s) && typeof s.path === 'string' && s.path ? sourceUrl(assets, s.path) : null;
       if (!url) return;
-      const img = await assets.image(url).catch(() => null);
+      const img = await assets.image(url, { retry: true }).catch(() => null);
       if (img && img.width > 0) images[k] = img;
     }));
     if (!images.D) return null;
     return { key: `${atlasUrl}#${tiles.version || 0}`, tiles, images };
-  })().catch(() => null);
+  })().catch(() => null).then(art => {
+    if (!art && cached === pending) cached = null;
+    return art;
+  });
+  cached = pending;
   return cached;
 }
 

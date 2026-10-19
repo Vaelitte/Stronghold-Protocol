@@ -51,6 +51,7 @@
 // caller falls back (docs/ASSETS.md "Other fallbacks").
 
 import { cosmetics, createCosmeticLayers, EMPTY_MANIFEST } from './cosmetics.js';
+import { artNetwork, fetchArt } from './assetNetwork.js';
 
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const str = (v) => (typeof v === 'string' && v ? v : null);
@@ -638,14 +639,22 @@ export function localAssetUrl(m, group, name) {
 }
 
 /** Default browser image loader. */
-export function loadImageElement(url) {
+export function loadImageElement(url, { signal = null } = {}) {
   return new Promise((resolve, reject) => {
     if (typeof Image === 'undefined') { reject(new Error('no Image in this environment')); return; }
     const img = new Image();
     img.decoding = 'async';
     img.crossOrigin = 'anonymous';
-    img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error(`image failed: ${url}`));
+    const finish = (error = null) => {
+      img.onload = img.onerror = null;
+      signal?.removeEventListener('abort', abort);
+      if (error) reject(error); else resolve(img);
+    };
+    const abort = () => { finish(new Error(`image aborted: ${url}`)); img.src = ''; };
+    img.onload = () => finish();
+    img.onerror = () => finish(new Error(`image failed: ${url}`));
+    if (signal?.aborted) { abort(); return; }
+    signal?.addEventListener('abort', abort, { once: true });
     img.src = url;
   });
 }
@@ -785,6 +794,8 @@ export const SPINE_QUIET_DELAY_MS = 3000;
 export const MANIFEST_RETRY_MS = Object.freeze([600, 2000]);
 /** Waits (ms) before the store tries again by itself after a `ready()` whose fetches all failed transiently. */
 export const MANIFEST_BACKOFF_MS = Object.freeze([5000, 15000, 30000, 60000]);
+/** Failed image results expire so a transient outage is not remembered for the whole page. */
+export const IMAGE_FAILURE_TTL_MS = 15000;
 
 /** A fetch failure worth retrying (data.js): network error, HTTP 5xx / 408 / 429 — not a 404 or a body that is no JSON. */
 const transientFetch = (err) => {
@@ -814,7 +825,8 @@ const transientFetch = (err) => {
  *           spineQuietBytes?: number, spineIdleGrace?: number, spineEvictDelay?: number, spineQuietDelay?: number,
  *           spineTimers?: { set, clear }, spineNow?: () => number, retryDelays?: number[], backoff?: number[],
  *           wait?: (ms: number) => Promise<void>, timers?: { set, clear },
- *           cosmetics?: ReturnType<typeof createCosmeticLayers> | null }} [opts]
+ *           cosmetics?: ReturnType<typeof createCosmeticLayers> | null,
+ *           imageNetwork?: typeof artNetwork, imageNow?: () => number }} [opts]
  */
 export function createAssets(options) {
   const opts = options && typeof options === 'object' ? options : {};
@@ -827,6 +839,8 @@ export function createAssets(options) {
   let manifest = isObj(opts.manifest) ? opts.manifest : null;
   let readyPromise = manifest ? Promise.resolve(manifest) : null;
   const loadImage = opts.loadImage || loadImageElement;
+  const imageNetwork = opts.imageNetwork || artNetwork;
+  const imageNow = opts.imageNow || Date.now;
   const images = new Map(); // url → { promise, value }
   const retryDelays = Array.isArray(opts.retryDelays) ? opts.retryDelays : MANIFEST_RETRY_MS;
   const backoff = Array.isArray(opts.backoff) ? opts.backoff : MANIFEST_BACKOFF_MS;
@@ -919,8 +933,8 @@ export function createAssets(options) {
       return (opts.unloadSpine || unloadSpineData)(e, value, keep);
     },
     max: opts.spineMax ?? 60,
-    timeout: opts.spineTimeout ?? 20000,
-    concurrency: opts.spineConcurrency ?? 6,
+    timeout: opts.spineTimeout ?? 60000,
+    concurrency: opts.spineConcurrency ?? 3,
     // memory budget (a parsed skeleton holds ~0.1–12 MB): idle skeletons beyond SPINE_IDLE_BYTES go, and all of
     // them once no scene has referenced or held any for SPINE_QUIET_DELAY_MS (lobby / room / result; a field view in
     // battle mode holds the cache — see the header), each after a grace that covers a prep ⇄ battle switch; evictions
@@ -946,30 +960,34 @@ export function createAssets(options) {
     const s = str(u);
     if (!s) return Promise.resolve(null);
     let e = images.get(s);
-    if (retry && e?.done && !e.value) { images.delete(s); e = null; }
+    if (e?.done && !e.value && (retry || imageNow() - e.failedAt >= IMAGE_FAILURE_TTL_MS)) { images.delete(s); e = null; }
     if (!e) {
-      e = { value: null, done: false, promise: null };
-      e.promise = Promise.resolve().then(() => loadImage(s)).then(
+      e = { value: null, done: false, promise: null, failedAt: 0 };
+      e.promise = imageNetwork.run(async signal => {
+        const img = await loadImage(s, { signal });
+        if (!img) throw new Error(`image failed: ${s}`);
+        return img;
+      }).then(
         (img) => { e.value = img; e.done = true; if (!img) failed(s); return img; },
-        () => { e.done = true; failed(s); return null; },
+        () => { e.done = true; e.failedAt = imageNow(); failed(s); return null; },
       );
       images.set(s, e);
     }
     return e.promise;
   }
 
-  /** Optional local-client art manifest (null when absent: every consumer falls back). Fetched once (or seeded). */
+  /** Optional local-client art manifest: keep successes, retry transient failures and allow a later call after failure. */
   function local() {
     if (!localPromise) {
-      localPromise = (async () => {
+      const pending = (async () => {
         try {
-          const res = await doFetch(localUrl, { cache: 'no-cache' });
-          if (!res || !res.ok) return localManifest;
-          const json = await res.json();
+          const json = await fetchArt(localUrl, { fetch: doFetch, cache: 'no-cache' });
           if (!localManifest && isObj(json) && isObj(json.groups)) { localManifest = json; notify('local'); }
         } catch { /* optional art: absent */ }
+        if (!localManifest && localPromise === pending) localPromise = null;
         return localManifest;
       })();
+      localPromise = pending;
     }
     return localPromise;
   }

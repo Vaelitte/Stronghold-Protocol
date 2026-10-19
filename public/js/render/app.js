@@ -443,10 +443,19 @@ export async function createFieldView(host, options = {}) {
   tiles.setView(bandFor('prep'), camRect(), fieldRows('prep'));
   // the real board art of the local client (optional): wait briefly so the first frame already uses it; a late
   // arrival swaps the atlas in place
-  const artPromise = loadBoardArt(assets).then((art) => {
-    if (art && !destroyed) { tiles.setArt(art); tiles.project(cam, true); }
-    return art;
-  }, () => null);
+  let flatArtTimer = 0, flatArtTries = 0, flatArtPending = null;
+  function retryFlatArt() {
+    if (destroyed || flatArtPending) return flatArtPending;
+    clearTimeout(flatArtTimer);
+    flatArtPending = loadBoardArt(assets).then((art) => {
+      if (art && !destroyed) { tiles.setArt(art); tiles.project(cam, true); }
+      if (!art && !destroyed && flatArtTries < 4) flatArtTimer = setTimeout(retryFlatArt, [2000, 6000, 15000, 30000][flatArtTries++]);
+      return art;
+    }, () => null).finally(() => { flatArtPending = null; });
+    return flatArtPending;
+  }
+  const artPromise = retryFlatArt();
+  setupCleanup.push(() => clearTimeout(flatArtTimer));
 
   // ---- 3D board layer (render/board3d, DESIGN §15) -----------------------------------------------------------
   let board3d = null;          // BoardScene while the 3D board is on
@@ -454,13 +463,22 @@ export async function createFieldView(host, options = {}) {
   let board3dError = null;
   // lost-context recovery: the THREE module + art pack of the last 3D board, the pending retry, failures so far
   const recover = { THREE: null, pack: null, timer: 0, tries: 0, since: 0, off: false, count: 0 };
+  const artRetry = { boardTimer: 0, boardTries: 0, sceneTimer: 0, sceneTries: 0, sceneId: '' };
+  const artRetryMs = [2000, 6000, 15000, 30000];
+  setupCleanup.push(() => { clearTimeout(artRetry.boardTimer); clearTimeout(artRetry.sceneTimer); });
   setupCleanup.push(() => { clearTimeout(recover.timer); disable3d(); });
   /** The stage's official scene, once loaded (the procedural board shows meanwhile and when there is none). */
   function useOfficialScene(st) {
     const id = st && typeof st.id === 'string' ? st.id : '';
     if (!id || !board3d) return;
+    if (artRetry.sceneId !== id) { artRetry.sceneId = id; artRetry.sceneTries = 0; }
+    clearTimeout(artRetry.sceneTimer);
     loadScenePack(assets, id).then((scene) => {
-      if (scene && !destroyed && board3d && stageRec && stageRec.id === id) board3d.setScenePack(id, scene);
+      if (destroyed || !board3d || stageRec?.id !== id) return;
+      if (scene) board3d.setScenePack(id, scene);
+      if ((!scene || scene.incomplete) && artRetry.sceneTries < artRetryMs.length) {
+        artRetry.sceneTimer = setTimeout(() => { if (!destroyed && stageRec?.id === id) useOfficialScene(stageRec); }, artRetryMs[artRetry.sceneTries++]);
+      }
     }).catch(() => {});
   }
   function enable3d(THREE, pack) {
@@ -539,10 +557,17 @@ export async function createFieldView(host, options = {}) {
   let boardRetry = null;
   function retryBoard() {
     if (!want3d || destroyed || board3d || recover.off || recover.timer || boardRetry) return;
+    clearTimeout(artRetry.boardTimer);
     boardRetry = Promise.all([loadThree(), loadBoardPack(assets)])
       .then(([THREE, pack]) => enable3d(THREE, pack), () => false)
-      .finally(() => { boardRetry = null; });
+      .finally(() => {
+        boardRetry = null;
+        if (!destroyed && !board3d && artRetry.boardTries < artRetryMs.length) {
+          artRetry.boardTimer = setTimeout(retryBoard, artRetryMs[artRetry.boardTries++]);
+        }
+      });
   }
+  boardReady.then(ok => { if (!ok) retryBoard(); });
   // the official soft shadow sprite replaces the procedural one once loaded (may already be cached); asked again whenever
   // the manifest names another one (it arrived late, a cosmetic plugin changed it); none named any more: the procedural one
   let shadowUrl = null;
@@ -2108,6 +2133,8 @@ export async function createFieldView(host, options = {}) {
   function onAssets() {
     if (destroyed) return;
     retryBoard();
+    retryFlatArt();
+    if (board3d && stageRec) useOfficialScene(stageRec);
     loadShadow();
     loadMountains();
     if (pluginFx.source !== assets.manifest?.fx) {
@@ -2124,14 +2151,20 @@ export async function createFieldView(host, options = {}) {
   setupCleanup.push(() => offAssets?.());
   const onVisible = () => {
     if (destroyed || globalThis.document?.visibilityState !== 'visible') return;
+    artRetry.boardTries = artRetry.sceneTries = 0;
+    flatArtTries = 0;
     retryBoard();
+    retryFlatArt();
+    if (board3d && stageRec) useOfficialScene(stageRec);
     if (assets.loaded === false && typeof assets.ready === 'function') assets.ready();
     for (const v of views.values()) v.retryAssets?.();
     for (const v of penViews.values()) v.retryAssets?.();
     leader?.view.retryAssets?.();
   };
   globalThis.document?.addEventListener?.('visibilitychange', onVisible);
+  globalThis.addEventListener?.('online', onVisible);
   setupCleanup.push(() => globalThis.document?.removeEventListener?.('visibilitychange', onVisible));
+  setupCleanup.push(() => globalThis.removeEventListener?.('online', onVisible));
 
   // ---- public API ---------------------------------------------------------------------------------------------
 

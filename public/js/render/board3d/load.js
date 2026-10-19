@@ -15,6 +15,7 @@
 
 import { resolveUvTable } from './atlas.js';
 import { parseObj } from './obj.js';
+import { fetchArt } from '../../assetNetwork.js';
 
 export const THREE_URL = '/vendor/three.module.js';
 
@@ -100,10 +101,10 @@ export async function boardArtListed(assets) {
 }
 
 async function fetchText(url) {
-  try { const r = await fetch(url, { cache: 'no-cache' }); return r.ok ? await r.text() : null; } catch { return null; }
+  try { return await fetchArt(url, { type: 'text' }); } catch { return null; }
 }
 async function fetchJson(url) {
-  try { const r = await fetch(url, { cache: 'no-cache' }); return r.ok ? await r.json() : null; } catch { return null; }
+  try { return await fetchArt(url); } catch { return null; }
 }
 
 /**
@@ -301,7 +302,7 @@ export function sceneGroupRects(chunks) {
 }
 
 async function fetchBuffer(url) {
-  try { const r = await fetch(url, { cache: 'no-cache' }); return r.ok ? await r.arrayBuffer() : null; } catch { return null; }
+  try { return await fetchArt(url, { type: 'buffer' }); } catch { return null; }
 }
 
 const sceneCache = new Map();
@@ -331,9 +332,11 @@ export function loadScenePack(assets, stageId) {
     if (!isObj(doc) || doc.version !== SCENE_VERSION || !buf) return null;
     const chunks = parseSceneChunks(doc, buf);
     if (!chunks || !chunks.length) return null;
+    let incomplete = false;
     const img = async (u) => {
       if (!u) return null;
       const i = await assets.image(u, { retry: true }).catch(() => null);
+      if (!i || !(i.width || i.naturalWidth)) incomplete = true;
       return i && (i.width || i.naturalWidth) > 0 ? i : null;
     };
     const mats = isObj(doc.materials) ? doc.materials : {};
@@ -349,9 +352,9 @@ export function loadScenePack(assets, stageId) {
     const tex = {}, data = {};
     names.forEach((n, i) => { if (texList[i]) tex[n] = texList[i]; });
     dataNames.forEach((n, i) => { if (dataList[i]) data[n] = dataList[i]; });
-    return { key: `${url(group, 'scene')}#${doc.binBytes | 0}`, stage: stageId, doc, chunks, groups: sceneGroupRects(chunks), images: { tex, data, lm, env } };
+    return { key: `${url(group, 'scene')}#${doc.binBytes | 0}`, stage: stageId, doc, chunks, groups: sceneGroupRects(chunks), images: { tex, data, lm, env }, incomplete };
   })().catch((err) => { console.warn('[board3d] scene load failed', err); return null; }).then((pack) => {
-    if (!pack && sceneCache.get(stageId) === pending) sceneCache.delete(stageId);
+    if ((!pack || pack.incomplete) && sceneCache.get(stageId) === pending) sceneCache.delete(stageId);
     return pack;
   });
   sceneCache.set(stageId, pending);

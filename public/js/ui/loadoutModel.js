@@ -16,6 +16,7 @@
 import { loadoutOptions, checkLoadout, checkLoadoutOps, resolveLoadout, MODULE_NONE, LOADOUT_LIMITS } from '../../../shared/protocol.js';
 import { isPotential, isCultivate, POTENTIAL_DEFAULT, CULTIVATE_DEFAULT } from '../../../shared/potential.js';
 import { t, N_ } from '../../../shared/i18n.js';
+import { cleanPicks } from './diyModel.js';
 
 export { MODULE_NONE };
 
@@ -170,9 +171,9 @@ export const LOADOUT_IMPORT_MAX_BYTES = 256 * 1024;
  * Portable payload of a loadout, as downloaded / copied by 导出 — with the per-operator 潜能 / 练度 (`ops`, 0.2.2; an
  * older build reading it ignores the field).
  * @param {Record<string, any>} entries `room.loadout.entries`
- * @param {{ now?: number, ops?: Record<string, any> }} [o]
+ * @param {{ now?: number, ops?: Record<string, any>, diy?: Record<string, any> }} [o]
  */
-export function exportPayload(entries, { now = Date.now(), ops = {} } = {}) {
+export function exportPayload(entries, { now = Date.now(), ops = {}, diy } = {}) {
   const clean = {};
   for (const [id, e] of Object.entries(entries || {})) if (isObj(e)) clean[id] = { ...e };
   const cleanOps = {};
@@ -184,6 +185,7 @@ export function exportPayload(entries, { now = Date.now(), ops = {} } = {}) {
     count: Object.keys(clean).length,
     entries: clean,
     ops: cleanOps,
+    ...(diy === undefined ? {} : { diy: cleanPicks(diy) }),
   };
 }
 
@@ -200,7 +202,7 @@ export function serializeExport(entries, opts) {
  * A payload with `ops` (0.2.2) brings the per-operator 潜能 / 练度 too (`ops` in the result — absent when the payload has
  * none: an older export leaves the current settings alone); a payload of settings only imports.
  * @param {any} input payload object or serialised text
- * @returns {{ ok: true, entries: Record<string, any>, ops?: Record<string, any> } | { ok: false, error: string }}
+ * @returns {{ ok: true, entries: Record<string, any>, ops?: Record<string, any>, diy?: Record<string, any> } | { ok: false, error: string }}
  */
 export function parseImport(input) {
   let raw = input;
@@ -218,8 +220,12 @@ export function parseImport(input) {
   if (kind && kind !== LOADOUT_EXPORT_KIND) return { ok: false, error: t('这不是干员调配的数据') };
   const entries = parseStored(raw);
   const ops = isObj(raw.ops) ? parseStoredOps(raw) : null;
-  if (!Object.keys(entries).length && !(ops && Object.keys(ops).length)) return { ok: false, error: t('里面没有有效的调配条目') };
-  return ops ? { ok: true, entries, ops } : { ok: true, entries };
+  const hasDiy = Object.hasOwn(raw, 'diy');
+  if (hasDiy && !isObj(raw.diy)) return { ok: false, error: t('无法识别的格式') };
+  const diy = hasDiy ? cleanPicks(raw.diy) : undefined;
+  if (hasDiy && Object.keys(raw.diy).length && !Object.keys(diy).length) return { ok: false, error: t('里面没有有效的调配条目') };
+  if (!Object.keys(entries).length && !(ops && Object.keys(ops).length) && !hasDiy) return { ok: false, error: t('里面没有有效的调配条目') };
+  return { ok: true, entries, ...(ops ? { ops } : {}), ...(hasDiy ? { diy } : {}) };
 }
 
 // ---- options & choices ---------------------------------------------------------------------------------------------

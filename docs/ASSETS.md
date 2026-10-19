@@ -2,6 +2,8 @@
 
 Owner: `tools/fetch-assets.mjs` and `tools/assets/*`. Research background: `docs/research/07-assets.md`.
 
+Personal fork, 2026-10-20: `public/js/assetNetwork.js` limits art transfers to four, with a 45-second deadline per attempt (including response bodies) and two retries for transient failures. Real HTTP 404/403 responses are not retried. Images and board data share this queue and preserve content-hash caching. Image failures expire after 15 seconds; failed optional manifests and board packs are not kept forever. Incomplete scene textures can be retried, and field views retry missing boards/scenes with bounded backoff and on visibility/network recovery. Spine loads allow 60 seconds with three concurrent models. These are transport/display changes; the simulation is unchanged.
+
 All official game art, Spine models and audio are **downloaded at install time**. They are never committed; `public/assets/` is git-ignored.
 
 Setup and explicit Forge imports also fetch official JSON tables on demand for plugin operators outside the shipped

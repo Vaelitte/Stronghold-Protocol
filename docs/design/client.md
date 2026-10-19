@@ -4,6 +4,8 @@ Part of [DESIGN.md](../DESIGN.md) (the index; section numbers are global).
 
 > **Personal fork override (2026-10-19):** the owner-requested interaction and observing rules in [PERSONAL.md](../PERSONAL.md) take precedence over the upstream descriptions below: deployment never auto-folds/zooms; one avatar click opens a teammate; live combat and other boss pairs may be observed.
 
+> **Personal fork update (2026-10-20):** art uses a shared four-request queue, bounded retries and deadlines. Failed local manifests, boards and scene textures can recover. Loadout exports include the four DIY slots and their selections; old files leave the slots unchanged. See [PERSONAL.md](../PERSONAL.md).
+
 
 ## 9. Client rendering contract (public/js/render)
 

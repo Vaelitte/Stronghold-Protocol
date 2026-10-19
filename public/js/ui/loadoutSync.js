@@ -94,23 +94,31 @@ export function setOpsMap(ops) {
  * sanitised and replace the current ones as well; without, the current ones stay.
  * @param {Record<string, any>} entries `parseImport(...).entries`
  * @param {(id: string) => any} lookup chess lookup
- * @param {{ ops?: Record<string, any>|null, isOperator?: (charId: string) => boolean }} [o]
- * @returns {{ applied: number, dropped: number, ops?: number }} entries kept / entries (and settings) not imported / settings
+ * @param {{ ops?: Record<string, any>|null, isOperator?: (charId: string) => boolean,
+ *   diy?: Record<string, any>, diyData?: object, kitted?: Iterable<string>|null }} [o]
+ * @returns {{ applied: number, dropped: number, ops?: number, diy?: number, diyApplied?: boolean }} entries kept / entries (and settings) not imported / settings
  *   kept (only with `ops`)
  */
-export function applyLoadoutEntries(entries, lookup, { ops = null, isOperator = null } = {}) {
+export function applyLoadoutEntries(entries, lookup, { ops = null, isOperator = null, diy, diyData = null, kitted = null } = {}) {
   const asked = Object.keys(entries || {}).length;
   const clean = sanitizeEntries(entries, lookup);
   const applied = Object.keys(clean).length;
   const cleanOps = ops && isOperator ? sanitizeOps(ops, isOperator) : null;
   const nOps = cleanOps ? Object.keys(cleanOps).length : 0;
   const askedOps = ops ? Object.keys(ops).length : 0;
+  const askedDiy = diy === undefined ? 0 : Object.keys(diy || {}).length;
+  const cleanDiy = diy !== undefined && diyData && kitted ? sanitizeDiyPicks(diy, diyData, kitted) : null;
+  const nDiy = cleanDiy ? Object.keys(cleanDiy).length : 0;
+  // An explicitly empty roster clears the slots. A nonempty but wholly unavailable
+  // roster must not erase the player's saved picks.
+  const diyApplied = !!cleanDiy && (nDiy > 0 || askedDiy === 0);
   if (applied || nOps) {
     if (cleanOps) loadoutStore.set({ ops: cleanOps });
     setEntries(applied ? clean : loadoutStore.get().entries);
   }
-  const dropped = Math.max(0, asked - applied) + Math.max(0, askedOps - nOps);
-  return cleanOps ? { applied, dropped, ops: nOps } : { applied, dropped };
+  if (diyApplied) setDiyPicks(cleanDiy);
+  const dropped = Math.max(0, asked - applied) + Math.max(0, askedOps - nOps) + Math.max(0, askedDiy - nDiy);
+  return { applied, dropped, ...(cleanOps ? { ops: nOps } : {}), ...(diy === undefined ? {} : { diy: nDiy, diyApplied }) };
 }
 
 /** Replace the stored not-owned list (干员持有; persisted at once, the sync picks the change up). */
