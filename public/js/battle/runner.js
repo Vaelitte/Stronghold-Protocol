@@ -199,6 +199,7 @@ export function createBattleRunner(deps) {
     if (!e.combatMetrics) return;
     const record = e.combatMetrics();
     record.round = e.spec?.round;
+    record.kind = e.kind;
     record.authoritative = e.authoritative === true;
     if (!(combatHistory.get(e.battleId)?.seconds > record.seconds)) combatHistory.set(e.battleId, record);
   };
@@ -981,7 +982,7 @@ export function createBattleRunner(deps) {
      * Read on demand by the panel — never sent to the server.
      * @param {{ scope?: 'battle'|'match', ownerId?: string|null }} [opts]
      */
-    combatMetrics({ scope = 'match', ownerId = null, round = null } = {}) {
+    combatMetrics({ scope = 'match', ownerId = null, round = null, kind = null } = {}) {
       const localEntries = [...entries.values(), ...pending.values()];
       if (scope === 'battle') {
         // scouting another field must not replace the player's own current battle statistics
@@ -993,10 +994,12 @@ export function createBattleRunner(deps) {
       for (const e of localEntries) if (e.combatMetrics) {
         const record = e.combatMetrics();
         record.round = e.spec?.round;
+        record.kind = e.kind;
         record.authoritative = e.authoritative === true;
         if (!(records.get(e.battleId)?.seconds > record.seconds)) records.set(e.battleId, record);
       }
       const selected = [...records.values()].filter((r) => (scope !== 'round' || r.round === round)
+        && (kind == null || r.kind === kind)
         && (ownerId == null || r.owners.includes(ownerId)));
       return { ...combineCombat(selected, ownerId), authoritative: selected.length > 0 && selected.every((r) => r.authoritative === true) };
     },

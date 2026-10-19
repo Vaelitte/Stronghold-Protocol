@@ -9,6 +9,7 @@ const labels = { idle: N_('登录后自动保存'), loading: N_('正在恢复玩
 export function PlayerProfileButton() {
   const [open, setOpen] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState(false);
   const state = useStore((s) => s, Object.is, profileState);
+  const automatic = !!globalThis.document?.querySelector('meta[name="sp-relay-origin"]');
   const file = useRef(null);
   const run = async (fn) => { setBusy(true); setError(false); try { await fn(); } catch (e) { setError(e.code === 'passport-active' ? 'active' : true); } finally { setBusy(false); } };
   return html`<div class="player-profile">
@@ -16,7 +17,8 @@ export function PlayerProfileButton() {
     <${Modal} open=${open} onClose=${() => setOpen(false)} title=${t('玩家档案与通行证')}>
       <p role="status">${t(labels[state.status] || labels.idle)}</p>
       ${state.playerId ? html`<p>${t('玩家 ID')} <code>${state.playerId}</code></p>` : null}
-      <p>${t('调配、持有、自选编队、皮肤选择与对局记录自动保存到服主电脑。换网址后导入同一份通行证，即可恢复同一玩家 ID 和最新档案。')}</p>
+      <p>${automatic ? t('随机网址通过统一入口自动恢复同一玩家 ID 和最新档案；素材按需下载并自动保存。通行证仍可用于备份或更换设备。')
+        : t('调配、持有、自选编队、皮肤选择与对局记录自动保存到服主电脑。换网址后导入同一份通行证，即可恢复同一玩家 ID 和最新档案。')}</p>
       <p class="t-lo">${t('通行证包含身份密钥，请妥善保存，不要发到群里。同一身份同时只能在一个页面游戏。')}</p>
       <${Button} disabled=${busy || !state.playerId} onClick=${() => run(async () => {
         const p = await exportPassport();

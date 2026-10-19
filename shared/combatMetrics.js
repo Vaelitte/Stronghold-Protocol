@@ -12,18 +12,30 @@ function operatorOf(source) {
 }
 
 /** Attach before the first tick, including silent catch-up. The simulation's own counters define effective HP loss. */
-export function trackCombat(battle) {
+export function trackCombat(battle, { timeline = false } = {}) {
   const rows = new Map();
+  const changes = new Map();
+  const remember = (row) => {
+    if (!timeline || !row) return;
+    let points = changes.get(row.key);
+    if (!points) { points = []; changes.set(row.key, points); }
+    const point = [positive(battle.time), row.damage, row.healing, ...DAMAGE_TYPES.map((t) => row.types[t])];
+    if (points.at(-1)?.[0] === point[0]) points[points.length - 1] = point;
+    else points.push(point);
+  };
   const damageMarks = new WeakMap();
   for (const u of battle.allyUnits || []) damageMarks.set(u, positive(u.stats?.dmg));
   function rowOf(source) {
     const u = operatorOf(source);
     if (!u) return null;
     const key = JSON.stringify([u.ownerId, u.uid != null ? `uid:${u.uid}` : `unit:${u.id}:${u.defId}`]);
-    if (!rows.has(key)) rows.set(key, {
+    if (!rows.has(key)) {
+      rows.set(key, {
       key, ownerId: u.ownerId, uid: u.uid, defId: u.defId, name: u.name, kind: u.kind,
       damage: 0, healing: 0, types: Object.fromEntries(DAMAGE_TYPES.map((t) => [t, 0])),
-    });
+      });
+      remember(rows.get(key));
+    }
     return rows.get(key);
   }
   for (const u of battle.allyUnits || []) rowOf(u);
@@ -39,6 +51,7 @@ export function trackCombat(battle) {
     if (!row || !delta) return;
     row.damage += delta;
     row.types[DAMAGE_TYPES.includes(type) ? type : 'true'] += delta;
+    remember(row);
   };
   const damagedHook = battle.on('damaged', onDamaged, { priority: Number.MAX_VALUE });
   // The heal hook is before mitigation/overheal. The return value is the actual restored HP, including silent regen.
@@ -47,7 +60,7 @@ export function trackCombat(battle) {
     const actual = heal.call(this, source, target, amount, opts);
     if (target?.side === 'ally' && positive(actual)) {
       const row = rowOf(source);
-      if (row) row.healing += actual;
+      if (row) { row.healing += actual; remember(row); }
     }
     return actual;
   }
@@ -58,6 +71,25 @@ export function trackCombat(battle) {
     owners: (battle.players || []).map((p) => p.playerId),
     rows: [...rows.values()].map((r) => ({ ...r, types: { ...r.types } })),
   });
+  // A headless AI battle can already be fully computed while its visible clock is still at the beginning.
+  // Record only actual counter changes; binary-searching them gives exact HP counters at the sampled game time.
+  if (timeline) read.at = (gt) => {
+    const seconds = Math.min(positive(gt), positive(battle.time));
+    const selected = [];
+    for (const row of rows.values()) {
+      const points = changes.get(row.key) || [];
+      if (!points.length || points[0][0] > seconds) continue;
+      let lo = 0, hi = points.length - 1;
+      while (lo < hi) {
+        const mid = (lo + hi + 1) >> 1;
+        if (points[mid][0] <= seconds) lo = mid; else hi = mid - 1;
+      }
+      const point = points[lo];
+      selected.push({ ...row, damage: point[1], healing: point[2],
+        types: Object.fromEntries(DAMAGE_TYPES.map((t, i) => [t, point[i + 3]])) });
+    }
+    return { seconds, owners: (battle.players || []).map((p) => p.playerId), rows: selected };
+  };
   // The settings switch turns the meter off mid-battle. Later damage is not counted; rows already taken stay readable.
   read.stop = () => {
     if (stopped) return;

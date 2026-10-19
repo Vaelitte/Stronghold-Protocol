@@ -2216,5 +2216,14 @@
   "将删除本机及服务器档案中的 {n} 条对局记录，无法恢复。": "Delete {n} match records from this browser and the server profile? This cannot be undone.",
   "对局记录会自动同步到服主电脑，并包含队友代号。跨网址恢复请使用玩家通行证。": "Match records, including teammates’ nicknames, sync to the host’s computer. Use your player passport to restore them at another URL.",
   "本机记录已清空，服务器同步失败；请在玩家档案中重试。": "Local records were cleared, but server sync failed. Retry in Player profile.",
-  "请先关闭使用该通行证的旧游戏页面，再导入。": "Close the old game page using this passport before importing it."
+  "请先关闭使用该通行证的旧游戏页面，再导入。": "Close the old game page using this passport before importing it.",
+  "正在恢复身份和素材缓存…": "Restoring identity and cached assets…",
+  "自动恢复入口暂时不可用，请检查网络后重试。": "Automatic recovery is unavailable. Check the connection and retry.",
+  "个人战斗": "Individual battle",
+  "首领战": "Boss battle",
+  "隐藏首领": "Hidden boss",
+  "战斗阶段": "Battle stage",
+  "个人战斗与联防分别统计；本局累计包含全部战斗。按实际扣血与有效治疗统计，切换视角不会重复计算。": "Individual and unite battles are counted separately; match totals include all battles. Counts use actual HP damage and effective healing; changing views never counts twice.",
+  "随机网址通过统一入口自动恢复同一玩家 ID 和最新档案；素材按需下载并自动保存。通行证仍可用于备份或更换设备。": "Random URLs use the shared entry to restore the same player ID and latest profile automatically. Assets download as needed and are saved automatically. Keep a passport for backups or another device.",
+  "随机网址共用统一入口的素材缓存，已缓存的文件无需重新下载；首次使用、清理缓存或素材更新时仍需加载。": "Random URLs share the entry’s asset cache. Cached files are reused; first use, cache clearing or asset updates still require a download."
 }

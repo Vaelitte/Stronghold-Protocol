@@ -4,7 +4,7 @@ import { trackCombat, combineCombat } from '../../public/js/battle/metrics.js';
 import { Unit } from '../../server/sim/units.js';
 import { makeBattle, chessRec, enemyRec } from '../helpers/battleHarness.js';
 
-function rig({ tracked = true } = {}) {
+function rig({ tracked = true, timeline = false } = {}) {
   const h = makeBattle({
     defs: {
       chess: { test_op: chessRec({ id: 'test_op', stats: { atk: 0, maxHp: 1000 }, skill: null }) },
@@ -13,10 +13,29 @@ function rig({ tracked = true } = {}) {
     units: [{ chessId: 'test_op', row: 9, col: 4 }], enemies: [{ key: 'enemy_test', pos: [9, 6] }],
     content: 'none', autoFinish: false, hooks: [],
   });
-  const read = tracked ? trackCombat(h.b) : null;
+  const read = tracked ? trackCombat(h.b, { timeline }) : null;
   h.step();
   return { h, b: h.b, u: h.unit('test_op'), e: h.enemy('enemy_test'), read };
 }
+
+test('a precomputed AI meter returns exact counters at its visible clock, including fractional samples and effective heals', () => {
+  const { b, u, e, read } = rig({ timeline: true });
+  b.time = 1;
+  b.dealDamage(u, e, { amount: 100, type: 'true' });
+  b.time = 2;
+  u.hp -= 60; b.heal(u, u, 100);
+  b.time = 2.5;
+  b.dealDamage(u, e, { amount: 200, type: 'true' });
+  b.time = 9;
+  assert.equal(read().rows[0].damage, 300, 'the simulation has already finished its later damage');
+  assert.equal(read.at(0.5).rows[0].damage, 0);
+  assert.equal(read.at(1).rows[0].damage, 100);
+  assert.equal(read.at(1.9).rows[0].healing, 0);
+  assert.equal(read.at(2).rows[0].healing, 60);
+  assert.equal(read.at(2.49).rows[0].damage, 100);
+  assert.equal(read.at(2.5).rows[0].damage, 300);
+  assert.equal(read.at(999).seconds, 9);
+});
 
 test('effective HP damage: mitigation, silent loss, overkill, shields, friendly damage and element gauge fill', () => {
   const { b, u, e, read } = rig();

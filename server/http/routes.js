@@ -82,12 +82,13 @@ const wantsTraffic = (query) => /(?:^|&)traffic(?:=(?:1|true|yes))?(?:&|$)/i.tes
  *   plugin studio (server/studio/index.js), or none
  * @returns {(req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse) => void}
  */
-export function createRequestHandler({ serveStatic, health, log, trustProxy = 'auto', studio = null, csp = null, trustedRuntime = null }) {
+export function createRequestHandler({ serveStatic, health, log, trustProxy = 'auto', studio = null, csp = null, trustedRuntime = null, browserEntry = null }) {
   async function handleRequest(req, res) {
     const url = req.url || '/';
     if (url.length > MAX_URL_LENGTH) { sendError(req, res, 414, '请求地址过长 · URI too long'); return; }
     const parts = splitUrl(url);
     if (!parts) { sendError(req, res, 400, '请求地址无效 · Bad request'); return; }
+    if (browserEntry && await browserEntry.handle(req, res, parts.rawPath)) return;
     if (parts.rawPath === '/api/profile' && health.registry.profiles) {
       await profileRequest(req, res, health.registry, health.registry.profiles);
       return;
@@ -110,6 +111,7 @@ export function createRequestHandler({ serveStatic, health, log, trustProxy = 'a
   return (req, res) => {
     setSecurityHeaders(res);
     if (csp) res.setHeader('Content-Security-Policy', csp);
+    browserEntry?.headers(req, res, csp);
     if (health.traffic) health.traffic.meter(res, splitUrl(req.url || '/')?.rawPath || '/');
     handleRequest(req, res).catch((e) => {
       log.error('[http] request failed', e);

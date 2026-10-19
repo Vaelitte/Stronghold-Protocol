@@ -54,7 +54,8 @@ export function importSupport(nav = globalThis.navigator, secure = globalThis.is
  */
 export function registerImportedAssetWorker(nav = globalThis.navigator, secure = globalThis.isSecureContext) {
   if (!secure || !nav?.serviceWorker?.register) return Promise.resolve(false);
-  return nav.serviceWorker.register('/sw.js', { scope: '/', updateViaCache: 'none' }).then(() => true, () => false);
+  const bridge = globalThis.document?.querySelector?.('meta[name="sp-relay-origin"]');
+  return nav.serviceWorker.register(bridge ? '/bridge-sw.js' : '/sw.js', { scope: '/', updateViaCache: 'none' }).then(() => true, () => false);
 }
 
 /** Content-Type stored with an imported response, chosen from the URL the game will request. */
@@ -100,14 +101,15 @@ function pathnameOf(url) {
  * cache of more than about 15,000 entries ("Operation too large"); a whole pack stores some 43,000 (the audio twice).
  */
 export const IMPORTED_INDEX_URL = '/sp-imported-index.json';
+export const AUTO_INDEX_URL = '/sp-auto-index.json';
 
 /** The index as a Set, or null without a readable one. */
-async function readImportIndex(cache) {
+async function readImportIndex(cache, index = IMPORTED_INDEX_URL) {
   try {
-    const hit = await cache.match(IMPORTED_INDEX_URL);
+    const hit = await cache.match(index);
     if (!hit) return null;
     const list = await hit.json();
-    return Array.isArray(list) ? new Set(list.filter((p) => typeof p === 'string' && p !== IMPORTED_INDEX_URL)) : null;
+    return Array.isArray(list) ? new Set(list.filter((p) => typeof p === 'string' && p !== IMPORTED_INDEX_URL && p !== AUTO_INDEX_URL)) : null;
   } catch {
     return null;
   }
@@ -118,7 +120,7 @@ async function keyPaths(cache) {
   const out = new Set();
   for (const req of await cache.keys()) {
     const path = pathnameOf(typeof req === 'string' ? req : req.url);
-    if (path && path !== IMPORTED_INDEX_URL) out.add(path);
+    if (path && path !== IMPORTED_INDEX_URL && path !== AUTO_INDEX_URL) out.add(path);
   }
   return out;
 }
@@ -131,7 +133,8 @@ export async function listImportedPaths(cachesApi = globalThis.caches) {
   if (!cachesApi?.open) return new Set();
   try {
     const cache = await cachesApi.open(IMPORTED_ASSET_CACHE);
-    return (await readImportIndex(cache)) ?? await keyPaths(cache);
+    const manual = await readImportIndex(cache), auto = await readImportIndex(cache, AUTO_INDEX_URL);
+    return manual || auto ? new Set([...(manual || []), ...(auto || [])]) : await keyPaths(cache);
   } catch {
     return new Set();
   }
@@ -174,7 +177,8 @@ export async function countImportedFiles(cachesApi = globalThis.caches) {
 export async function pruneImportedPaths(wanted, cachesApi = globalThis.caches) {
   const cache = await cachesApi.open(IMPORTED_ASSET_CACHE);
   // no index yet: the keys, when Cache.keys() still answers (a whole pack always wrote an index)
-  const stored = (await readImportIndex(cache)) ?? await keyPaths(cache);
+  const manual = await readImportIndex(cache), auto = await readImportIndex(cache, AUTO_INDEX_URL);
+  const stored = manual || auto ? new Set([...(manual || []), ...(auto || [])]) : await keyPaths(cache);
   const stale = [...stored].filter((p) => !wanted.has(p));
   const kept = [...stored].filter((p) => wanted.has(p));
   let removed = 0, removedFiles = 0;
@@ -189,6 +193,9 @@ export async function pruneImportedPaths(wanted, cachesApi = globalThis.caches) 
   }
   await cache.put(IMPORTED_INDEX_URL, new Response(JSON.stringify(kept.sort()), {
     status: 200, headers: { 'Content-Type': 'application/json' },
+  }));
+  if (auto) await cache.put(AUTO_INDEX_URL, new Response(JSON.stringify(kept.filter((p) => auto.has(p))), {
+    headers: { 'Content-Type': 'application/json' },
   }));
   return { removed, removedFiles, kept: kept.length };
 }

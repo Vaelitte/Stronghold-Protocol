@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { rememberDamageFields, roundCombat, matchCombat, requestCombatSample, receiveCombatSample } from '../../server/match/damage.js';
+import { rememberDamageFields, roundCombat, stageCombat, matchCombat, requestCombatSample, receiveCombatSample } from '../../server/match/damage.js';
 import { validateC2S } from '../../shared/protocol.js';
 
 const row = (ownerId, damage, healing = 0) => ({ ownerId, defId: 'chess_test', name: '测试干员', kind: 'op', damage, healing,
@@ -62,4 +62,31 @@ test('sample timeout is explicit; stale reports, invalid numbers and oversized r
   assert.equal(validateC2S(msg), null);
   assert.ok(validateC2S({ ...msg, damage: [row('p1', -1)] }));
   assert.ok(validateC2S({ ...msg, damage: Array(129).fill(row('p1', 0)) }));
+});
+
+test('headless AI snapshots follow the field clock; individual and unite battles remain separate in the current round', () => {
+  const { m, sent } = fixture();
+  let elapsed = 4;
+  const meter = () => ({ seconds: 60, owners: ['ai'], rows: [row('ai', 6000)] });
+  meter.at = (seconds) => ({ seconds, owners: ['ai'], rows: [row('ai', seconds * 100)] });
+  m._fieldElapsed = () => elapsed;
+  const normal = { cc: true, mode: 'server', kind: 'normal', players: ['ai'], done: false, battle: { combatMetrics: meter } };
+  m.fields = [normal];
+  requestCombatSample(m, 'p1');
+  assert.equal(sent.at(-1).combat.damage, 400, 'future headless damage is not shown early');
+  elapsed = 8.25;
+  requestCombatSample(m, 'p1');
+  assert.equal(sent.at(-1).combat.damage, 825, 'the next sample reads the exact current clock');
+  normal.done = true;
+  assert.equal(roundCombat(m).damage, 6000);
+  m.fields = [{ kind: 'unite', players: ['ai'], damageRecord: { seconds: 5, owners: ['ai'], rows: [row('ai', 700)] } }];
+  requestCombatSample(m, 'p1');
+  const sample = sent.at(-1);
+  assert.equal(sample.combatKind, 'unite');
+  assert.equal(sample.combat.damage, 700);
+  assert.equal(sample.combatStages.normal.damage, 6000);
+  assert.equal(sample.combatMatch.damage, 6700);
+  assert.equal(stageCombat(m).unite.damage, 700);
+  requestCombatSample(m, 'p1');
+  assert.equal(sent.at(-1).combatMatch.damage, 6700, 'sampling stage tabs never adds duplicate records');
 });

@@ -68,7 +68,7 @@ export class MatchClientCombat {
   _specBattle(spec, { sharedBoss = null } = {}) {
     try {
       const battle = createBattleFromSpec(spec, this.ds, { BattleClass: this.BattleClass, sharedBoss, logger: this.log, recordEvents: false });
-      battle.combatMetrics = trackCombat(battle);
+      battle.combatMetrics = trackCombat(battle, { timeline: true });
       return battle;
     } catch (e) {
       this.reportError(`battle ${spec && spec.fieldId} construct`, e);

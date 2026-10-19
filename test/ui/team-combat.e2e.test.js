@@ -41,7 +41,8 @@ test('real four-player combat: team columns, both scopes, latest sampling interv
     assert.equal(await host.page.$eval('.gm__fs', (e) => e.nextElementSibling?.classList.contains('gm__metrics')), true);
     await host.page.evaluate(() => {
       globalThis.__teamSamples = [];
-      globalThis.__SP__.net.on('b.metrics', (m) => globalThis.__teamSamples.push({ at: Date.now(), damage: m.combat.damage, pending: m.pendingPlayers }));
+      globalThis.__SP__.net.on('b.metrics', (m) => globalThis.__teamSamples.push({ at: Date.now(), damage: m.combat.damage, pending: m.pendingPlayers,
+        rows: m.combat.rows, kind: m.combatKind, stages: m.combatStages }));
     });
     await host.click('.gm__metrics');
     await host.page.waitForFunction(() => globalThis.__teamSamples.length >= 2);
@@ -50,6 +51,18 @@ test('real four-player combat: team columns, both scopes, latest sampling interv
       assert.ok((await host.page.$eval('#combat-metrics-panel', (e) => e.textContent)).includes(label), label);
     }
     await host.page.waitForFunction(() => globalThis.__teamSamples.some((m) => m.damage > 0 && !m.pending.length), { timeout: 20000 });
+    assert.equal(await host.page.$eval('.combat-metrics__scopes button[aria-pressed="true"]', (e) => e.textContent), '当前战斗');
+    await host.click('.combat-metrics__scopes button', '联防');
+    assert.equal(await host.page.$$eval('.combat-metrics__player .combat-metrics__totals b', (els) => els.every((e) => e.textContent === '0')), true);
+    await host.click('.combat-metrics__scopes button', '个人战斗');
+    await host.page.waitForFunction(() => {
+      const samples = globalThis.__teamSamples;
+      const bots = globalThis.__SP__.store.get().match.public.players.filter((p) => p.isBot).map((p) => p.playerId);
+      return bots.some((id) => {
+        const values = samples.map((s) => s.rows.filter((r) => r.ownerId === id).reduce((n, r) => n + r.damage, 0));
+        return Math.max(...values) > Math.min(...values);
+      });
+    }, { timeout: 20000 });
     const counters = await host.page.evaluate(async () => {
       const runner = (await import('/js/battle/runner.js')).battleRunner;
       return [...runner._entries.values()].map((e) => ({ authority: e.authoritative, time: e.battle?.time,

@@ -1,6 +1,7 @@
 // C4 simulation hosts (DESIGN §32.11). The clock belongs to runner.js. Only the vanilla host has a Battle on the page.
 import { loadBrowserSim, checkOperatorTraitRuntime } from './simLoader.js';
 import { unitStatsEntry } from '../../../shared/protocol.js';
+import { relayWorkerUrl } from '../browserTransport.js';
 
 /** [ASSUMED] 2 s per RPC, including construction and forceEnd (both can execute plugin hooks). */
 export const WORKER_TIMEOUT_MS = 2000;
@@ -60,7 +61,7 @@ export class InPageSimHost {
 
 /** Wire state only: no engine import or engine object, including in the dev introspection hooks. */
 export class WorkerSimHost {
-  constructor({ workerFactory = () => new Worker(new URL('./simWorker.js', import.meta.url), { type: 'module' }),
+  constructor({ workerFactory = () => new Worker(relayWorkerUrl(new URL('./simWorker.js', import.meta.url)), { type: 'module' }),
     timeoutMs = WORKER_TIMEOUT_MS, loadTimeoutMs = WORKER_LOAD_TIMEOUT_MS, onFailure = () => {}, contentFor = null } = {}) {
     this.contentFor = contentFor;
     this.remote = true;
