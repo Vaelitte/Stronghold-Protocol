@@ -44,7 +44,7 @@ async function network(request, remote, navigation = false) {
   // it is not a timestamp/cache buster. Old no-CORS responses otherwise fail when migrating an existing browser.
   if (remote !== self.location.origin && !url.pathname.startsWith('/api/') && ['GET', 'HEAD'].includes(request.method)) target.searchParams.set('sp-cors', '1');
   const r = await fetch(target.href, {
-    method: request.method, headers, credentials: 'omit', mode: 'cors', redirect: 'error', cache: request.cache,
+    method: request.method, headers, credentials: remote === self.location.origin ? 'same-origin' : 'omit', mode: 'cors', redirect: 'error', cache: request.cache,
     ...(request.method === 'GET' || request.method === 'HEAD' ? {} : { body: await request.clone().arrayBuffer() }),
   });
   const out = plainHeaders(r);

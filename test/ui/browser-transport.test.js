@@ -7,13 +7,13 @@ import { browserRelay, relayWorkerUrl } from '../../public/js/browserTransport.j
 test('stable worker caches only successful complete hashed art, serves audio ranges, and never trusts a relay from a URL', async () => {
   const listeners = {}, stored = new Map(), calls = [];
   const origin = 'https://entry.example.test', remote = 'https://trusted.trycloudflare.com';
-  let denyCache = false;
+  let denyCache = false, route = 'random';
   const cache = {
     async match(key) { return stored.get(new URL(key, origin).href)?.clone(); },
     async put(key, value) { if (denyCache) throw new Error('quota'); stored.set(new URL(key, origin).href, value.clone()); },
   };
   const ctx = { self: { location: { origin }, addEventListener: (k, fn) => { listeners[k] = fn; },
-    skipWaiting: async () => {}, clients: { claim: async () => {}, get: async () => ({ url: origin + '/?sp-relay=random&url=https://evil.test' }) } },
+    skipWaiting: async () => {}, clients: { claim: async () => {}, get: async () => ({ url: origin + '/?sp-relay=' + route + '&url=https://evil.test' }) } },
   caches: { open: async () => cache }, URL, Headers, Request, Response, setTimeout: (fn) => { fn(); },
   fetch: async (url, opts) => {
     calls.push({ url: String(url), opts });
@@ -62,6 +62,10 @@ test('stable worker caches only successful complete hashed art, serves audio ran
   await request('/api/profile', { method: 'PUT', headers: { Authorization: 'Bearer private', 'Content-Type': 'application/json' }, body: '{}' });
   assert.equal(calls.at(-1).url, remote + '/api/profile');
   assert.equal(calls.at(-1).opts.headers.get('authorization'), 'Bearer private');
+  assert.equal(calls.at(-1).opts.credentials, 'omit', 'cross-origin relays do not receive browser cookies');
+  route = 'fixed';
+  await request('/healthz');
+  assert.equal(calls.at(-1).opts.credentials, 'same-origin', 'the stable entry retains the tunnel visitor cookie');
   assert.equal(calls.some((c) => c.url.includes('evil.test')), false);
   assert.equal(await request('https://other.test/assets/~0123456789abcdef/a.png'), null);
 });
