@@ -222,15 +222,21 @@ test('takeover: a connected client that never reports is taken over at time limi
   m.dispose();
 });
 
-test('observing: no watching while the own battle runs; after it ends a teammate\'s spec + clock; eliminated players watch anything', () => {
+test('personal observing: watch while the own battle runs; reconnect restores authority before the watched display', () => {
   const h = makeMatch({ mode: 'coop', humans: 3, seed: 9107, fake: true, clientCombat: true, instant: false, pace: 'paced',
     script: (b) => ({ duration: b.players.includes('p_0') ? 2 : 30 }) }).start();
   const m = h.m;
   h.toPrep(1);
   for (const pid of ['p_0', 'p_1', 'p_2']) m.handle(pid, { t: 'g.ready', ready: true });
   h.run(() => m.phase === PHASE.COMBAT);
-  // p_1 still fights: it may not look elsewhere
-  assert.deepEqual(m.handle('p_1', { t: 'g.watch', fieldId: 'n:p_2' }), { error: 'WRONG_PHASE', detail: 'own battle running' });
+  assert.deepEqual(m.handle('p_1', { t: 'g.watch', fieldId: 'n:p_2' }), { ok: true });
+  assert.equal(fields(h).find(f => f.fieldId === 'n:p_1').live, true);
+  const beforeResync = h.sent.length;
+  m._resendBattle(h.ps('p_1'));
+  const restored = h.sent.slice(beforeResync).filter(([pid, msg]) => pid === 'p_1' && msg.t === 'b.start').map(([, msg]) => msg);
+  assert.deepEqual(restored.map(msg => [msg.fieldId, msg.authoritative, msg.watch]), [
+    ['n:p_1', true, false], ['n:p_2', false, true],
+  ]);
   h.run(() => fields(h).find((f) => f.fieldId === 'n:p_0').done);
   const target = fields(h).find((f) => f.fieldId === 'n:p_2');
   assert.equal(target.live, true);
@@ -270,6 +276,9 @@ test('Final Assault: two client-run pair fields share the server pool (b.progres
   assert.deepEqual(startMsgs.map(([pid, x]) => `${pid}:${x.fieldId}:${x.authoritative ? 'A' : 'r'}`).sort(),
     [b1, b2].flatMap((f, i) => f.players.map(pid => `${pid}:${f.fieldId}:${pid === authorities[i] ? 'A' : 'r'}`)).sort());
   assert.equal(startMsgs[0][1].spec.boss.poolMax, m.bossPool.maxHp);
+  assert.deepEqual(m.handle(authorities[0], { t: 'g.watch', fieldId: b2.fieldId }), { ok: true }, 'other boss pair is visible in the personal fork');
+  assert.equal(h.lastTo(authorities[0], 'b.start').authoritative, false, 'the watched pair never transfers authority');
+  assert.deepEqual(m.handle(authorities[0], { t: 'g.watch', fieldId: b1.fieldId }), { ok: true });
   const max = m.bossPool.maxHp;
   h.sched.advance(3000);
   const hp = m.bossPool.hp;

@@ -208,6 +208,29 @@ test('b.end forced ends the local battle and reports at once; a new prep clears 
   r.runner.dispose();
 });
 
+test('own battle keeps simulating and reporting while a teammate is on screen', async () => {
+  const start = realStart(7312);
+  const r = rig();
+  try {
+    await r.runner.onStart(start);
+    const ownEntry = r.runner._entries.get(start.battleId);
+    const tickBefore = ownEntry.battle.tickCount;
+    const teammate = structuredClone(start);
+    teammate.battleId = 'watch-while-fighting';
+    teammate.fieldId = 'n:teammate';
+    teammate.authoritative = false;
+    teammate.watch = true;
+    await r.runner.onStart(teammate);
+    assert.equal(r.runner.state().fieldId, teammate.fieldId);
+    r.advance(3000, 50);
+    assert.ok(ownEntry.battle.tickCount > tickBefore, 'the own simulation advances off screen');
+    assert.ok(r.net.sent.some(msg => msg.t === 'b.progress' && msg.battleId === start.battleId));
+    assert.ok(!r.net.sent.some(msg => ['b.progress', 'b.result'].includes(msg.t) && msg.battleId === teammate.battleId), 'display replica never reports');
+    await r.runner.onStart(start);
+    assert.equal(r.runner._entries.get(start.battleId), ownEntry, 'returning home reuses the running battle');
+  } finally { r.runner.dispose(); }
+});
+
 test('own battle statistics stay available when viewing a teammate; owner filtering excludes teammate damage', async () => {
   const start = realStart(7311);
   const r = rig();

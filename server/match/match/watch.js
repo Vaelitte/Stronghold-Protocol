@@ -54,10 +54,7 @@ export class MatchWatch {
     if (this.clientCombat && this.fields.length && this.fields.some((x) => x.cc)) return this._watchClient(ps, fieldId, playerId);
     const f = this.fields.find((x) => x.fieldId === fieldId);
     if (f) {
-      // 最终攻势 / 隐秘核心: "两名参与者会处于同一个战场，但无法查看另一组队友的战场情况" — a fighting player sees its own
-      // boss field only (eliminated / departed players spectate freely)
-      const own = this.fieldOf(ps);
-      if ((f.kind === 'boss' || f.kind === 'hidden') && own && own !== f.fieldId) return fail(ERR.BAD_TARGET, 'other group hidden');
+      // Personal fork: every teammate's field may be watched during combat.
       this.watchers.set(ps.playerId, fieldId);
       this._watchPrefSet(ps, f, playerId);
       this._sendField(ps.playerId, fieldId);
@@ -65,8 +62,8 @@ export class MatchWatch {
     }
     if (fieldId.startsWith('n:')) {
       // prep scouting, only while no battle field is up: during 各自行动 / 联防 / 最终攻势 / 隐秘核心 an 'n:<pid>' id
-      // must name a live field (else the boss-group rule above could be bypassed, and the viewer would stop receiving
-      // its own field's snapshots). The scout stays in `watchers` so a later board change pushes prepFieldMeta again
+      // must name a live field so the viewer does not switch to a nonexistent board and stop receiving snapshots.
+      // The scout stays in `watchers` so a later board change pushes prepFieldMeta again
       // (GitHub #87); combat start clears the map and reassigns live fields, spectators included.
       if (this.fields.length) return fail(ERR.BAD_TARGET, 'no such field');
       const target = this.players.get(fieldId.slice(2));
@@ -130,17 +127,13 @@ export class MatchWatch {
 
   /**
    * g.watch under client-side combat: the watcher gets the field's spec (b.start, display only) and runs a local
-   * replica fast-forwarded to the field's clock. No watching while the own normal battle runs; the other pair's boss
-   * field is never shown to a fighting player; eliminated players may watch anything.
+   * replica fast-forwarded to the field's clock. This personal fork permits viewing other normal and boss fields
+   * while the own battle continues, without changing authority.
    */
   _watchClient(ps, fieldId, playerId = null) {
     const f = this.fields.find((x) => x.fieldId === fieldId) || null;
     if (!f) return fail(ERR.BAD_TARGET, 'no such field');
-    const own = this.fields.find((x) => x.players.includes(ps.playerId)) || null;
-    if (ps.alive) {
-      if ((f.kind === 'boss' || f.kind === 'hidden') && own && own !== f) return fail(ERR.BAD_TARGET, 'other group hidden');
-      if (f.kind === 'normal' && own && own !== f && own.live) return fail(ERR.WRONG_PHASE, 'own battle running');
-    }
+    // Switching the display never transfers authority or stops the own simulation.
     this.watchers.set(ps.playerId, f.fieldId);
     this._watchPrefSet(ps, f, playerId);
     this.sendTo(ps.playerId, this._startMsg(f, ps.playerId, { watch: !f.players.includes(ps.playerId) }));
@@ -160,6 +153,12 @@ export class MatchWatch {
     if (!f && !ps.alive) f = this._watchTargetField(ps, this.fields) || this.fields[0] || null;
     if (!f) return;
     this.watchers.set(ps.playerId, f.fieldId);
+    // A fresh page needs its own authoritative simulation too. Send it first so
+    // the runner retains it in the background when the watched display arrives.
+    const own = this.fields.find((x) => x.players.includes(ps.playerId));
+    if (own && own !== f && !own.done && own.authority === ps.playerId) {
+      this.sendTo(ps.playerId, this._startMsg(own, ps.playerId));
+    }
     this.sendTo(ps.playerId, this._startMsg(f, ps.playerId, { watch: !f.players.includes(ps.playerId) }));
   }
 

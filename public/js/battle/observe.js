@@ -1,11 +1,12 @@
 // Observing rules and labels of client-side combat (research 09 §3.1 / §6.3, DESIGN §14 "Spectating") — pure helpers
 // for the game screen, the team panel and the combat HUD (mirror of server/match/match/watch.js _watchClient):
-//   * prep (休整期): tap a teammate → 前往查看 → their board (read-only);
-//   * own normal battle running: no observing ("当前无法查看");
-//   * own battle over: "⌛ 作战结束，等待队友完成作战" + the teammates' progress; tap a teammate → 前往查看 → a local
+// Personal fork: one avatar click observes any teammate, including while the own battle runs.
+//   * prep (休整期): tap a teammate → their board (read-only);
+//   * own battle running: it continues off screen while the teammate is displayed;
+//   * own battle over: "⌛ 作战结束，等待队友完成作战" + the teammates' progress; tap a teammate → a local
 //     replica of their battle; 返回战场 goes back;
 //   * 联防 / 最终攻势: the ‹ › pill switches the camera LEFT half / 全景 / RIGHT half of the own field; the other pair's
-//     boss field is never shown to a fighting player;
+//     boss field and other teammates can also be selected directly in this personal fork;
 //   * eliminated: anything — each phase reset starts on the player it follows (the server's prep scout / b.start,
 //     followedScout).
 
@@ -40,21 +41,14 @@ export function nameOf(pub, playerId) {
  * @param {{ observing?: boolean, ownDone?: boolean }} [o] ownDone: the local simulation of the own battle already ended
  *   (its result is on the way to the server)
  */
-export function observeTarget(p, pub, myId, { observing = false, ownDone = false } = {}) {
+export function observeTarget(p, pub, myId, { observing = false } = {}) {
   if (!isObj(p)) return { reason: t('无效的目标') };
   if (p.playerId === myId) return observing ? { back: true } : { reason: null };
   if (p.alive === false || p.status === 'left') return { reason: t('该队友已被淘汰，无法查看') };
   const phase = pub?.phase;
-  const me = players(pub).find((x) => x.playerId === myId) || null;
-  const meAlive = me ? me.alive !== false : true;
   if (!COMBAT.has(phase)) return { fieldId: `n:${p.playerId}` };
   const target = fieldOf(pub, p.playerId);
   if (!target) return { reason: t('该队友当前没有战场') };
-  const own = fieldOf(pub, myId);
-  if (!meAlive || !own) return { fieldId: target.fieldId };
-  if (own.fieldId === target.fieldId) return { reason: t('队友与你在同一战场，使用 ‹ › 切换视角') };
-  if (target.kind === 'boss' || target.kind === 'hidden') return { reason: t('无法查看另一组队友的战场') };
-  if (own.kind === 'normal' && own.live !== false && !ownDone) return { reason: t('作战中无法查看队友，作战结束后可前往查看') };
   return { fieldId: target.fieldId };
 }
 
@@ -76,10 +70,10 @@ export function resumedWatch(b, { pub = null, myId = '', alive = true, watching 
   if (!isObj(pub) || !isObj(b) || typeof b.battleId !== 'string' || !b.battleId || b.battleId === seen) return keep;
   if (b.loading && !watching) return keep;
   const done = { seen: b.battleId, fieldId: null };
-  if (b.loading || watching || !alive || !isClientCombat(pub) || pub.phase !== PHASE.COMBAT) return done;
-  if (!b.watch || b.kind !== 'normal' || typeof b.fieldId !== 'string' || !b.fieldId) return done;
+  if (b.loading || watching || !alive || !isClientCombat(pub) || !COMBAT.has(pub.phase)) return done;
+  if (!b.watch || typeof b.fieldId !== 'string' || !b.fieldId) return done;
   const f = fields(pub).find((x) => x.fieldId === b.fieldId);
-  if (!f || f.kind !== 'normal' || !Array.isArray(f.players) || f.players.includes(myId)) return done;
+  if (!f || !Array.isArray(f.players) || f.players.includes(myId)) return done;
   return { seen: b.battleId, fieldId: b.fieldId };
 }
 

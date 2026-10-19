@@ -1075,3 +1075,7 @@ blocking `battleCheck` window. Failed grants leave the seat unpicked; auto/bot f
 and skips when none grants [ASSUMED]. Native `g.offer`/`g.offerRefresh` use plugin id, local window id, sequence and slot; `m.public.offers` is a
 reconnectable, spectator-readable snapshot. Bots resolve immediately. Sources, bounds and [ASSUMED] defaults are
 [PLUGINS §10b](PLUGINS.md#10b-offers--interaction-windows); test journals carry declarations and intents.
+
+## Personal fork observing
+
+The owner-requested rules in [PERSONAL.md](PERSONAL.md) allow observing while the own battle runs and across boss pairs. The own authoritative battle remains active off screen; reconnect restores it before sending the watched display.

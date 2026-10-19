@@ -2,6 +2,9 @@
 
 Part of [DESIGN.md](../DESIGN.md) (the index; section numbers are global).
 
+> **Personal fork override (2026-10-19):** the owner-requested interaction and observing rules in [PERSONAL.md](../PERSONAL.md) take precedence over the upstream descriptions below: deployment never auto-folds/zooms; one avatar click opens a teammate; live combat and other boss pairs may be observed.
+
+
 ## 9. Client rendering contract (public/js/render)
 
 **Operator skins (§34.23, [SKINS.md](../SKINS.md)).** [ASSUMED] Retain received skin IDs separately from displayed

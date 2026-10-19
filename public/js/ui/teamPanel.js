@@ -2,13 +2,13 @@
 // tower, status glyph (… acting / ✓ ready / ⌛ deciding / ⚔ combat / door left / ✕ dead), AI badge, "you" marker, the
 // field being watched (eye badge), and emote bubbles. In a boss round the viewer's pair is framed in green from the
 // round's start (gameLogic teamFrameIds; community report of 2026-10-06, item 51).
-// Observing (client-side combat, `observe` prop — the official flow): tapping a teammate's avatar expands a mint
-// "前往查看" button under the row (when that teammate can be observed now; otherwise the reason is toasted through
-// onWatch); while observing, the own row shows a "返回战场" button. Without `observe` (server-run combat) a click
+// Personal fork: one click on a teammate's avatar immediately observes that field; an unavailable target is
+// explained through onWatch. While observing, the own row shows a "返回战场" button.
+// Without `observe` (server-run combat) a click
 // watches that player's field at once, and a click while that field is already on screen does not ask again.
 // In PHASE.PREP a double-click on a teammate's avatar opens their field (GitHub #131, the 「前往查看」 shortcut).
 // It does not open a field the teammate does not have, and it does not open one the click already opened.
-// Boss-prep phases (最终攻势 / 隐秘核心) are not PHASE.PREP, so they still use 「前往查看」.
+// Boss-prep phases also use the direct single-click path in this personal fork.
 // Live LP (user playtest #3 item 2): during a normal round's battle each row's tower shows lp − the loss that player's
 // leaks so far will cost (red, −N): the own row the top bar's live value (`self`, ui/hud.js liveLp), a teammate's row
 // m.public players[].pendingLp (server/match/match/views.js, ~1 Hz). 联防 (user playtest #6 item 7): a leaker's row adds the
@@ -18,7 +18,7 @@
 // the player watches, so the number moves with the kills on screen), else m.public players[].uniteLeft (the authority's
 // report, ~1 Hz).
 
-import { useEffect, useRef, useState } from '../../vendor/hooks.module.js';
+import { useRef } from '../../vendor/hooks.module.js';
 import { PHASE } from '../../../shared/constants.js';
 import { html, Icon, Tooltip } from './components.js';
 import { PlayerAvatar, LpTower, GIcon, LocalSprite } from './gameComponents.js';
@@ -65,16 +65,16 @@ export function teammateFieldShown(watching, player) {
 }
 
 /**
- * A single click on a teammate avatar calls onWatch only in server-run combat (no `observe`), and only when
+ * A single click on a teammate avatar calls onWatch in either combat mode, and only when
  * that field is not already on screen. A double-click fires click first; the second click, and any later click
- * while the view is already theirs, must not open it again. Client combat never watches from the avatar click.
+ * while the view is already theirs, must not open it again.
  * `askedRecently`: this avatar's click already called onWatch in the last moment (the other click of a double-click,
  * before `watching` has re-rendered).
  * @param {{ observe?: unknown, watching?: string|null, player?: { playerId?: string, fieldId?: string }|null, askedRecently?: boolean }} [o]
  * @returns {boolean}
  */
 export function teammateClickWatches(o = {}) {
-  if (o.observe || o.askedRecently) return false;
+  if (o.askedRecently) return false;
   if (teammateFieldShown(o.watching, o.player)) return false;
   return !!o.player;
 }
@@ -117,11 +117,8 @@ export function rowLpTip(lp, cap = 10) {
  *   uniteLocal: the local 联防 replica's per-leaker counts while it is on screen (battle runner state().uniteLeft), else null
  */
 export function TeamPanel({ pub, myId, watching, bubbles, onWatch, compact = false, observe = null, self: selfLive = null, cap = 10, uniteLocal = null, spMarks = null }) {
-  const [openPid, setOpenPid] = useState(null);
   // the playerId whose avatar just called onWatch, so the other click of a double-click does not open the view again
   const askedAt = useRef(/** @type {{ id: string|null, at: number }} */ ({ id: null, at: 0 }));
-  const phaseKey = `${pub?.phase}:${pub?.round}`;
-  useEffect(() => { setOpenPid(null); }, [phaseKey, watching, observe?.observing]);
   const players = sortedPlayers(pub);
   if (!players.length) return null;
   // a boss round: the viewer's pair framed in green from the round's start (item 51 — the official bg_team_border,
@@ -139,19 +136,20 @@ export function TeamPanel({ pub, myId, watching, bubbles, onWatch, compact = fal
       }
       return;
     }
-    if (self) { if (observe.observing) observe.onBack(); setOpenPid(null); return; }
+    if (self) { if (observe.observing) observe.onBack(); return; }
     const view = observe.canObserve(p) || {};
     if (!view.fieldId) {
-      setOpenPid(null);
       if (!askedRecently(p)) { noteAsked(p); onWatch(p); } // the game screen toasts the reason; a double-click toasts once
       return;
     }
-    setOpenPid((cur) => (cur === p.playerId ? null : p.playerId));
+    if (teammateClickWatches({ observe, watching, player: p, askedRecently: askedRecently(p) })) {
+      noteAsked(p);
+      onWatch(p);
+    }
   };
   const dblClick = (e, p, self) => {
     if (!prepDblClickWatches({ phase: pub?.phase, self, observe, watching, player: p, askedRecently: askedRecently(p) })) return;
     e.preventDefault();
-    setOpenPid(null);
     noteAsked(p);
     onWatch(p);
   };
@@ -163,13 +161,12 @@ export function TeamPanel({ pub, myId, watching, bubbles, onWatch, compact = fal
       const watched = teammateFieldShown(watching, p);
       const bubble = bubbles?.get(p.playerId);
       const offline = p.connected === false && !p.isBot;
-      const open = !!observe && openPid === p.playerId && !self;
       const back = !!observe && self && observe.observing;
       const title = observe ? (self ? (observe.observing ? t('返回战场') : t('你自己')) : t('查看 {name} 的战场', { name: p.name })) : (self ? t('查看自己的阵地') : t('查看 {name} 的阵地', { name: p.name }));
       const lp = rowLp(p, pub, self ? selfLive : null, { uniteLocal, cap });
       const inTeam = team.has(p.playerId);
-      return html`<div key=${p.playerId} class=${cx('team__row', self && 'is-self', inTeam && 'is-team', watched && 'is-watched', p.alive === false && 'is-dead', open && 'is-open')}>
-        <button type="button" class="team__btn" onClick=${() => click(p, self)} onDblClick=${(e) => dblClick(e, p, self)} title=${inTeam && !self ? `${title} · ${t('与你在同一战场')}` : title} aria-expanded=${observe && !self ? String(open) : undefined}>
+      return html`<div key=${p.playerId} class=${cx('team__row', self && 'is-self', inTeam && 'is-team', watched && 'is-watched', p.alive === false && 'is-dead')}>
+        <button type="button" class="team__btn" onClick=${() => click(p, self)} onDblClick=${(e) => dblClick(e, p, self)} title=${inTeam && !self ? `${title} · ${t('与你在同一战场')}` : title}>
           <${PlayerAvatar} player=${p} self=${self} />
           ${inTeam ? html`<span class=${cx('team__frame', !frameArt && 'team__frame--plain')} style=${frameArt ? `--frame:url("${frameArt}")` : undefined} aria-hidden="true"></span>` : null}
           <span class="team__seat num">P${(p.seat ?? 0) + 1}</span>
@@ -193,8 +190,6 @@ export function TeamPanel({ pub, myId, watching, bubbles, onWatch, compact = fal
             <//>
             ${watched && !self ? html`<span class="team__eye" title=${t('正在查看')}><${GIcon} name="eye" /></span>` : null}
           </div>
-          ${open ? html`<button type="button" class="btn btn--primary btn--sm team__ob"
-            onClick=${() => { setOpenPid(null); onWatch(p); }}><span class="btn__label">${t('前往查看')}</span></button>` : null}
           ${back ? html`<button type="button" class="btn btn--secondary btn--sm team__back"
             onClick=${() => observe.onBack()}><span class="btn__label">${t('返回战场')}</span></button>` : null}
         </div>

@@ -46,14 +46,14 @@ test('a single click while already watching that teammate does not open the view
   assert.equal(teammateClickWatches({ watching: 'n:p_1', player: mate }), false);
   assert.equal(teammateClickWatches({ watching: 'other', player: mate }), true);
   assert.equal(teammateClickWatches({ watching: null, player: mate, askedRecently: true }), false, 'the other click of a double-click');
-  assert.equal(teammateClickWatches({ observe: observeOf('n:p_1'), watching: null, player: mate }), false, 'client combat opens 「前往查看」, it does not watch on click');
+  assert.equal(teammateClickWatches({ observe: observeOf('n:p_1'), watching: null, player: mate }), true, 'client combat opens the field on the first click');
   assert.equal(teammateFieldShown('n:p_1', mate), true);
   assert.equal(teammateFieldShown(null, mate), false);
 });
 
-test('the panel wires both guards and keeps 「前往查看」', () => {
+test('the panel wires both guards and omits the intermediate 「前往查看」 action', () => {
   assert.ok(SRC.includes('onDblClick=${(e) => dblClick(e, p, self)}'));
   assert.ok(SRC.includes('prepDblClickWatches('));
   assert.ok(SRC.includes('teammateClickWatches('));
-  assert.ok(SRC.includes("${t('前往查看')}"));
+  assert.ok(!SRC.includes("${t('前往查看')}"));
 });

@@ -2,6 +2,9 @@
 
 Part of [DESIGN.md](../DESIGN.md) (the index; section numbers are global).
 
+> **Personal fork override (2026-10-19):** the owner-requested interaction and observing rules in [PERSONAL.md](../PERSONAL.md) take precedence over the upstream descriptions below: deployment never auto-folds/zooms; one avatar click opens a teammate; live combat and other boss pairs may be observed.
+
+
 ## 8. Network protocol (shared/protocol.js is normative)
 
 Transport: one WebSocket per tab at `/ws`, JSON text frames `{ t: '<type>', ...payload }`. Client requests may carry `rid` (request id); the server's direct reply echoes `rid` (`ok` or `error`). Server pushes have no `rid`. Max frame 64 KB inbound (a compressed frame counts its inflated size); rate limit 40 msgs/s per connection (excess dropped with `error RATE`). Frames from 1 KB up are compressed with permessage-deflate (RFC 7692; `server/http/websocket.js WS_DEFLATE`: no server context takeover, a 2 KB server window, zlib memLevel 7 — about 72 KB of zlib state per connection); smaller frames go out plain, and a client that offers no compression, or caps the server window below 2 KB, gets plain frames. A measured solo session (rounds 3–5, `/healthz?traffic=1`): 173 KB of server frames → 60 KB on the wire.

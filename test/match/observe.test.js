@@ -18,7 +18,7 @@ test('observeTarget: prep, own battle running / over, boss pairs, eliminated pla
     { fieldId: 'n:a', kind: 'normal', players: ['a'], live: liveA },
     { fieldId: 'n:b', kind: 'normal', players: ['b'], live: true, progress: { killed: 3, total: 8, done: false } },
   ], players);
-  assert.match(observeTarget(players[1], combat(true), 'a').reason, /作战中无法查看/);
+  assert.deepEqual(observeTarget(players[1], combat(true), 'a'), { fieldId: 'n:b' });
   assert.deepEqual(observeTarget(players[1], combat(true), 'a', { ownDone: true }), { fieldId: 'n:b' }, 'the local battle already ended');
   assert.deepEqual(observeTarget(players[1], combat(false), 'a'), { fieldId: 'n:b' });
   assert.deepEqual(observeTarget(players[0], combat(false), 'a', { observing: true }), { back: true });
@@ -32,8 +32,8 @@ test('observeTarget: prep, own battle running / over, boss pairs, eliminated pla
     { fieldId: 'b1', kind: 'boss', players: ['a', 'b'], live: true },
     { fieldId: 'b2', kind: 'boss', players: ['d'], live: true },
   ], [...players, P('d', 3)]);
-  assert.match(observeTarget(P('d', 3), fa, 'a').reason, /另一组/);
-  assert.match(observeTarget(players[1], fa, 'a').reason, /同一战场/);
+  assert.deepEqual(observeTarget(P('d', 3), fa, 'a'), { fieldId: 'b2' });
+  assert.deepEqual(observeTarget(players[1], fa, 'a'), { fieldId: 'b1' });
   const dead = pubOf('FINAL_ASSAULT', fa.fields, [{ ...players[0], alive: false }, players[1], P('d', 3)]);
   assert.deepEqual(observeTarget(P('d', 3), dead, 'a'), { fieldId: 'b2' }, 'eliminated: anything');
 });
@@ -84,8 +84,8 @@ test('resumedWatch: a reload while watching a teammate\'s battle adopts the rese
   // other rules keep theirs: an eliminated player's auto-observe, 联防 / boss fields, other phases, server-run combat
   assert.deepEqual(resumedWatch(watched, { ...o, alive: false }), { seen: 'r3-n:b', fieldId: null });
   const unite = pubOf('UNITE', [{ fieldId: 'u', kind: 'unite', players: ['b', 'c'], live: true }], players);
-  assert.deepEqual(resumedWatch({ battleId: 'r3-u', fieldId: 'u', kind: 'unite', watch: true }, { ...o, pub: unite }), { seen: 'r3-u', fieldId: null }, 'a 联防 leaker');
-  assert.deepEqual(resumedWatch(watched, { ...o, pub: { ...pub, phase: 'UNITE' } }), { seen: 'r3-n:b', fieldId: null });
+  assert.deepEqual(resumedWatch({ battleId: 'r3-u', fieldId: 'u', kind: 'unite', watch: true }, { ...o, pub: unite }), { seen: 'r3-u', fieldId: 'u' }, 'a 联防 leaker');
+  assert.deepEqual(resumedWatch(watched, { ...o, pub: { ...pub, phase: 'UNITE' } }), { seen: 'r3-n:b', fieldId: 'n:b' });
   assert.deepEqual(resumedWatch(watched, { ...o, pub: { ...pub, combatMode: 'server' } }), { seen: 'r3-n:b', fieldId: null });
   assert.deepEqual(resumedWatch({ ...watched, fieldId: 'n:x' }, o), { seen: 'r3-n:b', fieldId: null }, 'a field not listed');
 });

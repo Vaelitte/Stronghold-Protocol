@@ -463,10 +463,12 @@ function MatchScreen() {
   // camera (the same framing as 收起, left_prepare_camera_param), then gives the player's own shop state back. It is
   // derived from the interaction state only: `collapsed` (the 收起/展开 state) is never set by it.
   // 设置「部署时收起商店」 (default on). Off: a pickup changes neither the shop fold nor the camera.
-  // Only an explicit false disables it. [ASSUMED] the label 「部署时收起商店」.
+  // The personal fork disables the upstream 「部署时收起商店」 preference below.
   const deployFold = deployFoldsShop({
     ownPrep: !!view && viewModeRef.current === 'prep' && showPrep, editable, pen, drag: !!drag, facing: !!facing,
-    enabled: playerSettings.prepDeployFold !== false,
+    // Personal fork: keep the board camera and shop stable throughout deployment,
+    // including profiles that saved the upstream auto-fold setting as enabled.
+    enabled: false,
   });
   // the shop bar is shown folded (收起; the pen folds it for itself: the player's own state is the one it returns to) —
   // the own prep board then takes the official shop-collapsed camera (public issue #5, gameLogic prepCameraFor);
