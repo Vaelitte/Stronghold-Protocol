@@ -11,6 +11,9 @@ import { buildBattleSpec, createBattleFromSpec } from '../../sim/spec.js';
 import { testSlice } from '../testTrace.js';
 import { morphBattleOpt } from '../../../shared/plugins/rules.js';
 
+import { trackCombat } from '../../../shared/combatMetrics.js';
+import { rememberDamageFields } from '../damage.js';
+
 export class MatchClientCombat {
   /** Stop every client-combat timer and the headless pacer (phase end, finish, dispose). */
   _stopClientCombat() {
@@ -64,7 +67,9 @@ export class MatchClientCombat {
   /** A battle built from a spec on the server (headless / takeover / verification); never throws. */
   _specBattle(spec, { sharedBoss = null } = {}) {
     try {
-      return createBattleFromSpec(spec, this.ds, { BattleClass: this.BattleClass, sharedBoss, logger: this.log, recordEvents: false });
+      const battle = createBattleFromSpec(spec, this.ds, { BattleClass: this.BattleClass, sharedBoss, logger: this.log, recordEvents: false });
+      battle.combatMetrics = trackCombat(battle);
+      return battle;
     } catch (e) {
       this.reportError(`battle ${spec && spec.fieldId} construct`, e);
       return new DeadBattle({ fieldId: spec && spec.fieldId, kind: spec && spec.kind, players: (spec && spec.players) || [], rect: spec && spec.rect, stageId: spec && spec.stageId }, 'forced');
@@ -115,7 +120,9 @@ export class MatchClientCombat {
   /** Give every field its authority (a connected human) or run it on the server. */
   _launch(fields) {
     const now = this.sched.now();
+    rememberDamageFields(this);
     this.fields = fields;
+    rememberDamageFields(this);
     for (const f of fields) { f.startAt = now; f.lastProgressAt = now; }
     for (const f of fields) {
       const auth = this._authorityFor(f);

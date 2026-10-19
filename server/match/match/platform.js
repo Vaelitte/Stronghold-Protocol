@@ -10,6 +10,7 @@ import { syntheticResult } from '../fields.js';
 import { FLOW_TICKER_PRIORITY, OK, fail } from './common.js';
 import { msg } from '../../../shared/i18n.js';
 import { ruleOption } from '../../../shared/plugins/rules.js';
+import { requestCombatSample } from '../damage.js';
 
 const GAME_TYPES = new Set(Object.keys(C2S).filter((t) => Object.hasOwn(C2S, t) && (t.startsWith('g.') || t.startsWith('b.'))));
 
@@ -37,6 +38,14 @@ export class MatchPlatform {
   handle(playerId, msg) {
     const ps = this.players.get(playerId) || this.spectators.get(playerId);
     if (!ps || ps.isBot || ps.left) return fail(ERR.NOT_IN_ROOM);
+    if (msg?.t === 'b.metrics') {
+      if (this.disposed) return fail(ERR.WRONG_PHASE);
+      const at = this.sched.now();
+      if (at - (ps.metricsAt ?? -Infinity) < 450) return fail(ERR.RATE);
+      ps.metricsAt = at;
+      requestCombatSample(this, playerId);
+      return OK;
+    }
     // a spectator seat only watches (the platform routes nothing else of it)
     if (ps.spectator && (!msg || msg.t !== 'g.watch')) {
       // g.test shares the host's rate bucket (applyTestCommand audits SPECTATOR after the stamp).

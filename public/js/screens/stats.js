@@ -26,6 +26,7 @@ import { uiUrl, chessAvatarUrl, chessPortraitUrl, itemIconUrl } from '../ui/asse
 import { identity } from '../net.js';
 import { TITLE_HEX_SECTORS, titleSectorClip } from '../ui/titleHexagon.js';
 import { store, createStore, useStore, selectRoute } from '../store.js';
+import { profileState, flushProfile } from '../profileSync.js';
 import { ResultView } from './result.js';
 import { toast, toastError } from '../ui/toasts.js';
 import {
@@ -491,6 +492,7 @@ function StatsScreen({ tab }) {
   replayRef.current = replay;
   const inMatch = useStore((s) => selectRoute(s) === 'game');
   const nickname = useStore((s) => s.me.name);
+  const backed = useStore((s) => !!s.playerId, Object.is, profileState);
   useDocClass('sp-stats-open');
 
   // a match starting (the host pressed 开始) takes the player to its briefing: the overlay must not sit on top of it
@@ -542,11 +544,19 @@ function StatsScreen({ tab }) {
   const doClear = async () => {
     const ok = await confirmDialog({
       title: t('清空统计数据'), micro: 'CLEAR STATISTICS', danger: true, okText: t('清空'),
-      text: t('将删除本机保存的 {n} 条对局记录，无法恢复。', { n: stats.records.length }),
+      text: backed ? t('将删除本机及服务器档案中的 {n} 条对局记录，无法恢复。', { n: stats.records.length })
+        : t('将删除本机保存的 {n} 条对局记录，无法恢复。', { n: stats.records.length }),
     });
     if (!ok) return;
-    if (!saveStats(emptyStats())) { try { globalThis.localStorage?.removeItem('sp.pref.stats'); } catch { /* ignore */ } }
+    if (!saveStats(emptyStats())) {
+      if (backed) { toast(t('无法写入本机存储，可能已满'), 'error'); return; }
+      try { globalThis.localStorage?.removeItem('sp.pref.stats'); } catch { /* ignore */ }
+    }
     reload();
+    if (backed) {
+      try { await flushProfile(); }
+      catch { toast(t('本机记录已清空，服务器同步失败；请在玩家档案中重试。'), 'error'); return; }
+    }
     toast(t('已清空本机统计数据'), 'success');
   };
 
@@ -576,7 +586,9 @@ function StatsScreen({ tab }) {
         <${Button} variant="secondary" size="sm" data-testid="stats-clear" disabled=${empty || stats.newer} onClick=${doClear} title=${t('清空本机的统计数据')}>${t('清空')}<//>
       </div>
     </header>
-    <p class="st-note"><${Icon} name="info" />${t('本机数据：只保存在这个浏览器里，不会上传到服务器；同盟对局里队友的代号也会存在本机（导出文件里也有）。')}</p>
+    <p class="st-note"><${Icon} name="info" />${backed
+      ? t('对局记录会自动同步到服主电脑，并包含队友代号。跨网址恢复请使用玩家通行证。')
+      : t('本机数据：只保存在这个浏览器里，不会上传到服务器；同盟对局里队友的代号也会存在本机（导出文件里也有）。')}</p>
     ${stats.damaged ? html`<p class="st-note is-warn"><${Icon} name="warn" />${t('本机保存的统计数据无法读取，已另存为备份，从现在起重新记录。')}</p>` : null}
     ${stats.dropped ? html`<p class="st-note is-warn"><${Icon} name="warn" />${t('有 {n} 条记录已损坏，已忽略。', { n: stats.dropped })}</p>` : null}
     <div class="ui-slot" data-ui-slot="stats.tab" aria-label=${t('界面插件')} dangerouslySetInnerHTML=${{ __html: '' }}></div>

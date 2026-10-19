@@ -4,6 +4,7 @@
 // Installed on Match.prototype by server/match/Match.js (a method container: never instantiated; `this` is the match).
 
 import { PHASE, layerGainRoom } from '../../../shared/constants.js';
+import { rememberDamageFields } from '../damage.js';
 import { uniteSurvivors } from '../unite.js';
 import { buildResult } from '../results.js';
 import { FLOW_TICKER_PRIORITY, DELAYS } from './common.js';
@@ -76,6 +77,7 @@ export class MatchSettle {
       ps.recompute();
     }
     this.eliminateBroken();
+    rememberDamageFields(this);
     this.fields = [];
     this.watchers.clear();
     this.markPublic();

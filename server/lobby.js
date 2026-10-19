@@ -1614,7 +1614,7 @@ export class Lobby {
       return OK;
     }
     // a spectator only watches (header): nothing else of it ever reaches the match
-    if (msg.t !== 'g.watch' && !(room.test && msg.t === 'g.test') && room.spectatorOf(session.playerId)) return fail(ERR.SPECTATOR);
+      if (msg.t !== 'g.watch' && msg.t !== 'b.metrics' && !(room.test && msg.t === 'g.test') && room.spectatorOf(session.playerId)) return fail(ERR.SPECTATOR);
     let res;
     try {
       res = room.match.handle(session.playerId, msg);

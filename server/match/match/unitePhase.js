@@ -4,6 +4,7 @@
 // Installed on Match.prototype by server/match/Match.js (a method container: never instantiated; `this` is the match).
 
 import { PHASE, GEO } from '../../../shared/constants.js';
+import { rememberDamageFields } from '../damage.js';
 import { deriveSeed } from '../../sim/rng.js';
 import { uniteBattleOpts, uniteSurvivors } from '../unite.js';
 import { FieldRunner, timelineAt, uniteBillBounds } from '../fields.js';
@@ -19,7 +20,9 @@ export class MatchUnite {
     this.unitePlan = plan;
     const limit = this.wave ? this.wave.timeLimit : 60;
     const battle = this.newBattle(this._uniteOpts(plan, limit));
+    rememberDamageFields(this);
     this.fields = [{ fieldId: 'u', kind: 'unite', players: plan.helpers.map((p) => p.playerId), battle, live: true }];
+    rememberDamageFields(this);
     this.deadline = this.sched.instant ? 0 : this.sched.now() + Math.round((limit / this.gameSpeed) * 1000);
     this._defaultWatch();
     this.markPublic();

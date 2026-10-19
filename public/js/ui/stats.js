@@ -1,6 +1,6 @@
 // Local match statistics: every match the local player took part in is appended as one record to localStorage
-// (`sp.pref.stats`). Per-browser only — the server keeps matches in memory and has no identity, so there is nowhere
-// else for cross-match numbers to live; nothing here is ever sent anywhere. The stats page labels itself 本机数据 and
+// (`sp.pref.stats`). The personal deployment's profileSync.js optionally backs this up on the host's computer.
+// Without that service it remains per-browser. The stats page identifies the active storage and
 // offers JSON export / import for moving between devices. (Ported from PR #323 by @2321Robin, reworked for 0.2.2.)
 //
 // Two kinds of record (`end`):
@@ -50,6 +50,7 @@
 
 import { PHASE } from '../../../shared/constants.js';
 import { sanitizeName } from './playerName.js';
+import { notifyPref } from '../store.js';
 
 /** Current record-envelope version (bump + add a MIGRATIONS step when the record shape changes). */
 export const STATS_VERSION = 2;
@@ -407,6 +408,7 @@ export function saveStats(stats) {
       const ls = globalThis.localStorage;
       if (!ls) return false; // no storage at all (disabled by the browser)
       ls.setItem(FULL_KEY, JSON.stringify({ v: STATS_VERSION, records: recs }));
+      notifyPref(STATS_PREF_KEY);
       return true;
     } catch { /* quota or storage disabled — fall through to shrinking */ }
     if (recs.length <= 8) return false; // a small history that still does not fit is foreign quota pressure

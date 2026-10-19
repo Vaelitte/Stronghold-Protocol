@@ -144,10 +144,9 @@ import { inspectRange } from './game/range.js';
 import { t, tParts } from '../../../shared/i18n.js';
 import { TestConsole } from '../ui/testConsole.js';
 
-// 作战统计 is opt-in (settings `combatMetrics`, default off). The runner does not import the settings store;
-// this screen pushes the switch. Outside a browser battleRunner is null, so this is a no-op.
+// Every authority collects for its team. The setting controls the panel, not whether teammates can sample it.
 if (battleRunner) {
-  const applyCombatMetrics = (s) => battleRunner.setCombatMetrics(s?.combatMetrics === true);
+  const applyCombatMetrics = () => battleRunner.setCombatMetrics(true);
   applyCombatMetrics(settingsStore.get());
   settingsStore.subscribe(applyCombatMetrics);
 }
@@ -228,11 +227,9 @@ function MatchScreen() {
   const [refreshBusy, setRefreshBusy] = useState(false);
   useEffect(() => onRefreshBusy(setRefreshBusy), []);
   const [rewardMin, setRewardMin] = useState(false);
-  // 作战统计 (battle/metrics.js): a client-only local damage/healing panel — never uploaded to the server.
-  // Off unless the setting is on. A gameplay-plugin room (modRoom: content.vanilla === false) is simulated in a
-  // Worker, which has no damaged/heal data, so the button stays hidden. The hud.right ui-slot is not this gate.
+  // Expanded 作战统计: default on, all players and spectators, independent of the viewed field.
   const [metricsOpen, setMetricsOpen] = useState(false);
-  const showMetrics = metricsSetting && !modRoom && !spectator;
+  const showMetrics = metricsSetting && [PHASE.COMBAT, PHASE.UNITE, PHASE.FINAL_ASSAULT, PHASE.HIDDEN_CORE].includes(pub?.phase);
   useEffect(() => { if (!showMetrics) setMetricsOpen(false); }, [showMetrics]);
   const [emoteOpen, setEmoteOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -1739,6 +1736,11 @@ function MatchScreen() {
       <div class="gm__corner">
         ${showMetrics && metricsOpen ? html`<${CombatMetricsPanel} myId=${myId} onClose=${() => setMetricsOpen(false)} />` : null}
         ${spectator ? null : html`<${EmoteWheel} open=${emoteOpen} onToggle=${setEmoteOpen} onSend=${(id) => actions.emote(id)} disabled=${conn.status !== 'online'} />`}
+        ${prepLoadoutOpen && phase === PHASE.PREP && priv && !priv.ready && !spectator
+          ? html`<${LoadoutButton} from="prep" size="sm" />` : null}
+        <button type="button" class="gm__gear" aria-label=${t('设置')} title=${t('设置')} onClick=${() => setSettingsOpen(true)}><${GIcon} name="gear" /></button>
+        <button type="button" class="gm__gear gm__guide" aria-label=${t('玩法说明')} title=${t('玩法说明')} onClick=${() => openGuide(0)}><${Icon} name="book" /></button>
+        <${FullscreenButton} class="gm__gear gm__fs" />
         ${showMetrics ? html`<button type="button" class="gm__gear gm__metrics" aria-label=${t('作战统计')} title=${t('作战统计')} aria-expanded=${metricsOpen}
           aria-controls="combat-metrics-panel" onKeyDown=${(e) => { if (e.key === ' ') e.stopPropagation(); }} onClick=${() => {
             setMetricsOpen(!metricsOpen);
@@ -1746,12 +1748,7 @@ function MatchScreen() {
             setDetail(null);
             setSel(null);
             setBondOpen(null);
-          }}><${Icon} name="signal" /></button>` : null}
-        ${prepLoadoutOpen && phase === PHASE.PREP && priv && !priv.ready && !spectator
-          ? html`<${LoadoutButton} from="prep" size="sm" />` : null}
-        <button type="button" class="gm__gear" aria-label=${t('设置')} title=${t('设置')} onClick=${() => setSettingsOpen(true)}><${GIcon} name="gear" /></button>
-        <button type="button" class="gm__gear gm__guide" aria-label=${t('玩法说明')} title=${t('玩法说明')} onClick=${() => openGuide(0)}><${Icon} name="book" /></button>
-        <${FullscreenButton} class="gm__gear gm__fs" />
+          }}><${Icon} name="sword" /></button>` : null}
       </div>
 
       ${drawer ? html`<${EnemyDrawer} tab=${drawer} onTab=${setDrawer} pub=${pub} priv=${priv} onClose=${() => setDrawer(null)}

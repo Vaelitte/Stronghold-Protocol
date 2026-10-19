@@ -1027,3 +1027,18 @@
 @media (prefers-reduced-motion: reduce) {
   .downm__face.is-out, .downm__title { animation: none; }
 }
+
+/* Personal deployment: centered, responsive team columns; the field keeps playing behind it. */
+.combat-metrics--team {
+  position: fixed; left: 50%; top: 50%; bottom: auto; transform: translate(-50%, -50%); z-index: 90;
+  width: min(1320px, calc(100vw - 32px)); max-height: min(760px, calc(100dvh - 32px));
+}
+.combat-metrics__columns { display: grid; grid-template-columns: repeat(var(--combat-players), minmax(220px, 1fr)); min-height: 0; overflow-x: auto; }
+.combat-metrics__player { display: flex; flex-direction: column; min-width: 0; min-height: 0; max-height: min(600px, calc(100dvh - 180px)); border-right: 1px solid var(--line-2); }
+.combat-metrics__player:last-child { border-right: 0; }
+.combat-metrics__player h3 { margin: 0; padding: 8px 12px; color: var(--mint-400); overflow-wrap: anywhere; font-size: max(calc(.18 * var(--t)), 15px); }
+.combat-metrics__player .combat-metrics__totals { grid-template-columns: 1fr; }
+.combat-metrics--team .combat-metrics__list { overflow-y: auto; }
+.player-profile { margin: 8px 0; }
+.combat-metrics__frequency { display: flex; flex-basis: 100%; flex-wrap: wrap; align-items: center; gap: 8px; padding: 0 0 10px; color: var(--text-md); }
+.combat-metrics__frequency input { width: min(320px, 100%); accent-color: var(--mint-400); }

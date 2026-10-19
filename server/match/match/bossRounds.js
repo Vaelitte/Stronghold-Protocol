@@ -36,6 +36,8 @@ const BOSS_MIN_CLEAR_GS = 5;
 const BOSS_LP_BURST = 10;
 const BOSS_LP_PER_GS = 1;
 
+import { rememberDamageFields } from '../damage.js';
+
 export class MatchBoss {
   startFinalAssault(hidden) {
     const alive = this.alivePlayers();
@@ -67,6 +69,7 @@ export class MatchBoss {
     const groups = pairPlayers(alive, createRng(deriveSeed(this.seed, 'boss-pairs')), this.bossPairs);
     this.bossPairs = groups.map(g => g.map(p => p.playerId));
     const reuse = this.bossWaves && this.bossWaves.length === groups.length && this.bossWaves.every((w, i) => w.players.join() === groups[i].map((p) => p.playerId).join());
+    rememberDamageFields(this);
     this.fields = groups.map((g, i) => {
       const solo = this.isSolo || g.length === 1;
       const wave = reuse ? this.bossWaves[i].wave : buildBossWave(this.gd, this.rngWaves, this.factions, this.round, { bossId, solo });
@@ -114,6 +117,7 @@ export class MatchBoss {
       } catch (e) { this.reportError('boss leak hook', e); }
       return { fieldId, kind: hidden ? 'hidden' : 'boss', players: g.map((p) => p.playerId), battle, live: true };
     });
+    rememberDamageFields(this);
     this.overtimeApplied = 0;
     // HUD: the boss level's countdown (maxPlayTime, 120 real s — the battle goes on past it) and the moment the
     // overtime drain starts (150 real s), both on the field clock
@@ -156,7 +160,9 @@ export class MatchBoss {
     this.watchers.clear();
     if (!recs.some((f) => this._authorityFor(f))) {
       // nobody to simulate on a client: the server runs every boss field (FieldRunner, no streaming)
+      rememberDamageFields(this);
       this.fields = recs;
+      rememberDamageFields(this);
       for (const f of recs) {
         f.mode = 'server';
         // a CreditPool with nothing acknowledged credits everything; it counts this field's damage for b.pool `acked`

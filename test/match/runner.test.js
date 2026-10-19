@@ -662,14 +662,40 @@ test('a Worker host never attaches the combat meter, even when the setting is on
   r.runner.dispose();
 });
 
-test('settings expose 作战统计 off by default and the match hides the button unless it is on', () => {
+test('fresh metric queries sample cumulative current values instead of replaying stored reports', async () => {
+  const r = rig();
+  const start = realStart(7312);
+  r.net.emit('b.start', start);
+  await r.settle();
+  r.advance(1000, 50);
+  assert.equal(r.net.sent.filter((m) => m.t === 'b.metricsReport').length, 0);
+  const sample = (sampleId) => {
+    r.net.emit('b.metricsQuery', { battleId: start.battleId, sampleId });
+    const msg = r.net.sent.at(-1);
+    assert.equal(msg.t, 'b.metricsReport');
+    assert.equal(validateC2S(msg), null);
+    assert.equal(msg.sampleId, sampleId);
+    const e = r.runner._entries.get(start.battleId);
+    assert.equal(msg.gt, e.battle.time);
+    assert.equal(msg.damage.reduce((n, row) => n + row.damage, 0), r.runner.combatMetrics({ scope: 'battle' }).damage);
+    return msg;
+  };
+  const first = sample('3.1');
+  r.advance(5000, 50);
+  const second = sample('3.2');
+  assert.ok(second.gt > first.gt);
+  assert.equal(r.net.sent.filter((m) => m.t === 'b.metricsReport').length, 2, 'only the requested latest samples are sent');
+  r.runner.dispose();
+});
+
+test('settings enable team statistics by default and retain the display switch', () => {
   const settings = readFileSync(new URL('../../public/js/ui/settings.js', import.meta.url), 'utf8');
   const game = readFileSync(new URL('../../public/js/screens/game.js', import.meta.url), 'utf8');
   const logic = readFileSync(new URL('../../public/js/ui/gameLogic/settings.js', import.meta.url), 'utf8');
-  assert.match(logic, /combatMetrics: false/);
+  assert.match(logic, /combatMetrics: true/);
   assert.match(settings, /label=\$\{t\('作战统计'\)\} micro="COMBAT STATS" value=\$\{s\.combatMetrics\}/);
-  assert.match(game, /setCombatMetrics\(s\?\.combatMetrics === true\)/);
-  assert.match(game, /const showMetrics = metricsSetting && !modRoom && !spectator/);
+  assert.match(game, /setCombatMetrics\(true\)/);
+  assert.match(game, /const showMetrics = metricsSetting && \[PHASE.COMBAT/);
   assert.match(game, /data-ui-slot="hud\.right"/);
   const state = { me: {}, room: null, match: { public: null, battle: null }, connection: { status: 'online' } };
   const line = (s) => buildDiagnostics({ state, env: {}, settings: s }).split('\n').find((l) => l.startsWith('settings:'));

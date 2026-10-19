@@ -22,6 +22,7 @@
 import { ResumeMatchButton } from '../ui/resumeMatch.js';
 import { AssetDownloadButton } from '../ui/assetDownload.js';
 import { AssetImportButton } from '../ui/assetImport.js';
+import { PlayerProfileButton } from '../ui/playerProfile.js';
 import { useEffect, useMemo, useState } from '../../vendor/hooks.module.js';
 import { NAME_MAX_LEN, APP_VERSION, DEV_BUILD } from '../../../shared/constants.js';
 import { html, Button, Icon, MicroLabel, TextField, PingPill } from '../ui/components.js';
@@ -268,6 +269,7 @@ export function TitleScreen() {
         </div>
       </div>
       <div class="title-assets">
+        <${PlayerProfileButton} />
         <${AssetDownloadButton} />
         <${AssetImportButton} />
       </div>

@@ -146,7 +146,8 @@ export class SessionRegistry {
   /**
    * @param {{ reconnectWindowMs?: number, maxSessions?: number, now?: () => number }} [opts]
    */
-  constructor({ reconnectWindowMs = NET_DEFAULTS.reconnectWindowMs, maxSessions = NET_DEFAULTS.maxSessions, now = Date.now } = {}) {
+  constructor({ reconnectWindowMs = NET_DEFAULTS.reconnectWindowMs, maxSessions = NET_DEFAULTS.maxSessions, now = Date.now, profiles = null } = {}) {
+    this.profiles = profiles;
     this.reconnectWindowMs = reconnectWindowMs;
     this.maxSessions = maxSessions;
     this.now = now;
@@ -177,7 +178,17 @@ export class SessionRegistry {
   /** @param {unknown} token @returns {Session | null} a live (non-expired) session for this token */
   byToken(token) {
     if (typeof token !== 'string' || token.length === 0) return null;
-    const s = this.byTokenMap.get(token);
+    let s = this.byTokenMap.get(token);
+    if ((!s || this.isExpired(s, this.now())) && this.profiles) {
+      const p = this.profiles.read(token);
+      if (p) {
+        if (s) { this.remove(s); this.onRestoreExpired?.(s); }
+        if (this.byPlayerId.size >= this.maxSessions && !this.evictOne()) return null;
+        s = new Session({ playerId: p.playerId, token, name: p.name, now: this.now() });
+        this.byPlayerId.set(s.playerId, s);
+        this.byTokenMap.set(token, s);
+      }
+    }
     if (!s) return null;
     if (this.isExpired(s, this.now())) return null;
     return s;
@@ -674,7 +685,8 @@ export class Network {
     let resumed = false;
     const repeat = !!session;
     if (!session) {
-      session = msg.token ? this.registry.byToken(msg.token) : null;
+      try { session = msg.token ? this.registry.byToken(msg.token) : null; }
+      catch { this.reply(conn, errorMsg(ERR.INTERNAL, rid, 'player profile unavailable')); return; }
       if (session) {
         if (session.connected && session.ws && session.ws !== conn.ws
           && (msg.noReplace || (Number.isFinite(msg.claimAt) && session.claimAt != null && msg.claimAt > session.claimAt))) {

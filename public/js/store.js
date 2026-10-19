@@ -190,6 +190,11 @@ export function loadPref(key, fallback) {
  */
 export function savePref(key, value) {
   try { globalThis.localStorage?.setItem(`sp.pref.${key}`, JSON.stringify(value)); } catch { /* ignore */ }
+  notifyPref(key);
+}
+
+export function notifyPref(key) {
+  if (globalThis.dispatchEvent && globalThis.CustomEvent) globalThis.dispatchEvent(new CustomEvent('sp:pref', { detail: key }));
 }
 
 const identity = (s) => s;

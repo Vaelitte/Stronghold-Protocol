@@ -51,6 +51,9 @@ export function AssetDownloadButton() {
       ${state.total > 0 ? html`<p>${t('已就绪 {ready}，缺少 {missing}', { ready, missing })}</p>` : null}
       <p class="t-lo">${t('已导入的素材直接使用，不再向服务器请求。')}</p>
       <p class="t-lo">${t('下载本服务器提供的素材到浏览器缓存。关闭窗口会暂停；缓存被清理后可再次下载。')}</p>
+      <p>${t('随机网址改变后，浏览器缓存不能直接共用。可保存离线素材包，换网址后点击“导入素材包”，选择同一个文件；导入过程不上传素材。')}</p>
+      <a class="btn btn--secondary" href="/offline-assets.zip" download="Stronghold-assets.zip">${t('保存离线素材包（跨网址复用）')}</a>
+      <p class="t-lo">${t('包含本服提供的基础模型、贴图、地图、字体及音频；外观插件另带的皮肤素材不在基础清单中。')}</p>
       ${state.localMissing ? html`<p class="t-lo">${t('服务器未提供额外的本地素材包，将使用基础素材。')}</p>` : null}
       ${state.failures.length ? html`<div class="asset-download__errors">
         <p>${t('下载未完成。请重试；若文件持续缺失，请联系服主补齐素材。')}</p>

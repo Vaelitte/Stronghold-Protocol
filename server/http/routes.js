@@ -21,6 +21,7 @@ import { PROTOCOL_VERSION, APP_VERSION } from '../../shared/constants.js';
 import { buildTag } from './buildTag.js';
 import { setSecurityHeaders, sendError, sendJson, splitUrl } from './common.js';
 import { clientAddress, isLocalIp } from '../net.js';
+import { profileRequest } from '../profiles.js';
 
 const MAX_URL_LENGTH = 4096;
 
@@ -58,7 +59,7 @@ export function healthReport({ startedAt, network, registry, lobby, content = nu
     // hold now (P1c, §32.6 — a room's cosmetic plugins leave its cs the vanilla one, §32.3); how many unofficial plugins
     // it has, when it has some (a page's title screen says so; P1a)
     ...(content ? { content: { vanilla: content.cs, sets: contentSets(lobby), ...pluginCount(lobby) } } : {}),
-    sockets: network.connectionCount, sessions: registry.size, ...lobby.stats(),
+    sockets: network.connectionCount, sessions: registry.size, profiles: !!registry.profiles, ...lobby.stats(),
   };
   if (trusted && Object.keys(trusted).length) report.plugins = trusted;
   if (withTraffic && traffic) report.traffic = traffic.snapshot();
@@ -87,6 +88,10 @@ export function createRequestHandler({ serveStatic, health, log, trustProxy = 'a
     if (url.length > MAX_URL_LENGTH) { sendError(req, res, 414, '请求地址过长 · URI too long'); return; }
     const parts = splitUrl(url);
     if (!parts) { sendError(req, res, 400, '请求地址无效 · Bad request'); return; }
+    if (parts.rawPath === '/api/profile' && health.registry.profiles) {
+      await profileRequest(req, res, health.registry, health.registry.profiles);
+      return;
+    }
     if (trustedRuntime && parts.rawPath.startsWith('/x/') && await trustedRuntime.route(req,res,parts.rawPath)) return;
     if (studio && studio.handles(parts.rawPath)) { await studio.handle(req, res, parts.rawPath, parts.query); return; }
     if (req.method !== 'GET' && req.method !== 'HEAD') {

@@ -5,6 +5,7 @@
 // Installed on Match.prototype by server/match/Match.js (a method container: never instantiated; `this` is the match).
 
 import { ERR } from '../../../shared/constants.js';
+import { acceptDamage } from '../damage.js';
 import { HeadlessJob, syntheticResult, validateClientResult, HARD_CAP_SECONDS } from '../fields.js';
 import { resultDigest, compactResult as compactForVerify } from '../../sim/spec.js';
 import { testSlice } from '../testTrace.js';
@@ -20,6 +21,7 @@ export class MatchReports {
     if (!this.clientCombat) return fail(ERR.WRONG_PHASE, 'server-run combat');
     const f = this._fieldByBattle(msg.battleId);
     if (!f || f.done || f.verifyJob || f.mode !== 'client' || f.authority !== ps.playerId) return OK;
+    acceptDamage(f, msg);
     const p = f.progress;
     const maxTotal = Math.max(p.total, (f.spec.spawns.length + 1) * 400);
     p.gt = Math.max(p.gt, Math.min(Number(msg.gt) || 0, HARD_CAP_SECONDS));

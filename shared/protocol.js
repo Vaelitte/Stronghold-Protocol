@@ -608,12 +608,19 @@ export const C2S = {
     by: (v) => isMap(v, RESULT_LIMITS.players, isId, (x) => isNum(x, 0, BIG)), done: isBool,
     left: (v) => isMap(v, RESULT_LIMITS.players, isId, (x) => isInt(x, 0, 1e5)),
     leaksBy: (v) => isMap(v, RESULT_LIMITS.players, isId, (x) => isNum(x, 0, 1e6)),
-    $optional: ['resolved', 'leaks', 'bossDmg', 'by', 'done', 'left', 'leaksBy'],
+    damage: (v) => isList(v, 128, (r) => isPlain(r) && isId(r.ownerId) && isId(r.defId)
+      && isStr(r.name, 128) && ['op', 'token'].includes(r.kind)
+      && isNum(r.damage, 0, 1e15) && isNum(r.healing, 0, 1e15)
+      && isMap(r.types, 4, (k) => ['phys', 'arts', 'true', 'elemental'].includes(k), (x) => isNum(x, 0, 1e15))),
+    $optional: ['resolved', 'leaks', 'bossDmg', 'by', 'done', 'left', 'leaksBy', 'damage'],
   },
   // `cs` (DESIGN §32, optional): the content hash the reporting browser ran the battle on — its spec's `cs`. In a room
   // with gameplay plugins (P1c, DESIGN §32.6) the match refuses a result without it or with another one (and runs the
   // battle itself); a vanilla room's browser sends none
   'b.result': { battleId: isId, result: isBattleResult, cs: isContentHash, $optional: ['cs'] },
+  'b.metrics': {},
+  'b.metricsReport': { battleId: isId, sampleId: isId, gt: (v) => isNum(v, 0, 1e5),
+    damage: (v) => C2S['b.progress'].damage(v) },
   // A delegated bot layout rehearsal (DESIGN §14): the match's current host answers the candidates it was handed with
   // the S2C 'b.rehearsal' frame. `choice` is the index of the candidate its browser picked, in the order the task sent
   // them — a malicious or buggy client can only name one of the server's own candidate layouts, never a layout or a
@@ -629,7 +636,7 @@ export const C2S = {
 
 // Server → client message types (documentation + client dispatch table keys).
 export const S2C = [
-  'welcome', 'ok', 'error', 'pong',
+  'welcome', 'ok', 'error', 'pong', 'b.metrics', 'b.metricsQuery',
   'room.state', 'room.closed',
   'm.public', 'm.private', 'm.field', 'm.toast', 'm.ticker', 'm.emote', 'm.result',
   // m.layer { playerId, bondId, add } — own live prep layer gain; ephemeral, never replayed on resync.

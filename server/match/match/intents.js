@@ -9,6 +9,7 @@ import { PHASE, ERR, EMOTES, EMOTE_COOLDOWN_MS, GEO } from '../../../shared/cons
 import { deriveSeed } from '../../sim/rng.js';
 import { OK, fail } from './common.js';
 import { onHumanEmote } from '../botEmotes.js';
+import { receiveCombatSample } from '../damage.js';
 
 export class MatchIntents {
   _handle(ps, msg) {
@@ -54,6 +55,7 @@ export class MatchIntents {
       case 'g.leave': this.onLeave(ps.playerId); return OK;
       case 'g.test': return this.applyTestCommand(ps, msg);
       case 'b.progress': return this._onProgress(ps, msg);
+      case 'b.metricsReport': receiveCombatSample(this, ps, msg); return OK;
       case 'b.result': return this._onResult(ps, msg);
       // the host's answer to a delegated bot layout rehearsal (DESIGN §14): a report, never an error — an unknown,
       // expired or foreign task is ignored (MatchRehearsal._onRehearsalResult)

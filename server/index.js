@@ -36,6 +36,7 @@
 // The server only auto-listens when this file is the process entry point.
 
 import http from 'node:http';
+import { ProfileStore } from './profiles.js';
 import path from 'node:path';
 import { getData, loadData } from './data.js';
 import { ROOT, listenAddress, bindCandidates, serveDirs, makeLogger, parseTrustProxy, assetIndexOptionsFrom } from './http/config.js';
@@ -78,7 +79,7 @@ export {
  *   maxConnectionsPerAddr?: number, maxRoomsPerAddr?: number, maxMatchesPerAddr?: number, resyncMinGapMs?: number,
  *   heavyPerSec?: number, heavyBurst?: number, trustProxy?: 'auto' | boolean, soloReconnectWindowMs?: number,
  *   assetIndex?: boolean | { cacheFile?: string | null, delayMs?: number }, studio?: boolean,
- *   matchHost?: object,
+ *   matchHost?: object, profiles?: import('./profiles.js').ProfileStore | null,
  * }} [opts]
  *   assetIndex: the content-hash index (default on; false or SP_ASSET_INDEX=0: off — config.js assetIndexOptionsFrom);
  *   studio: the plugin studio at /studio/ (default on for this machine and the local network — SP_STUDIO=local|off;
@@ -125,7 +126,8 @@ export async function startServer(opts = {}) {
   // an out-of-memory abort in a worker thread ends the whole server)
   const transport = String(process.env.SP_MATCH_HOST || '').trim().toLowerCase() === 'worker' ? 'worker' : 'process';
   const hosts = createMatchHosts({ contents, log, options: { transport, maxWorkers: Math.max(1, policy.get().maxSets), ...(opts.matchHost || {}) } });
-  const { registry, lobby, network } = createSessionStack(opts, { data, log, content, plugins: roomSets, hosts });
+  const profiles = opts.profiles ?? (process.env.SP_PROFILE_DIR ? new ProfileStore(process.env.SP_PROFILE_DIR) : null);
+  const { registry, lobby, network } = createSessionStack({ ...opts, profiles }, { data, log, content, plugins: roomSets, hosts });
   const serveStatic = createStaticHandler({ publicDir, dataDir, sharedDir, simDir, packsDir, pluginsDir, packs, content, log, assetIndex, views, visual, contents });
   // the plugin studio (DESIGN §32.9): its page and API for this machine and the local network; it watches plugins/ only
   // once it is used (hot reload), and rooms whose host is the author or alone follow a plugin's changes by themselves

@@ -28,6 +28,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from '../../vendor/hooks
 import { html, Modal, Button, Icon, MicroLabel, confirmDialog } from './components.js';
 import { GIcon } from './gameComponents.js';
 import { createStore, useStore, loadPref, savePref, store } from '../store.js';
+import { PlayerProfileButton } from './playerProfile.js';
 import { sanitizeSettings, HOTKEY_ACTIONS, DEFAULT_HOTKEYS, hotkeyLabel, rebindHotkey, isDefaultHotkeys, captureHotkey, VOICE_LANGS, TEXT_SIZES } from './gameLogic.js';
 import { audio } from '../audio.js';
 import { openGuide } from './guide.js';
@@ -57,7 +58,11 @@ import { cosmetics } from '../cosmetics.js';
 const cx = (...p) => p.flat().filter(Boolean).join(' ');
 
 /** Settings store: { bgm, sfx, voice, voiceLang, voiceNative, voiceOverrides, muted, damageNumbers, officialDamageNumbers, ammoEnergyCount, combatMetrics, prepDeployFold, quality, textSize, keys }. */
-export const settingsStore = createStore(sanitizeSettings(loadPref('settings', null)));
+const savedSettings = loadPref('settings', null);
+// Enable the expanded panel once for existing installations; subsequent explicit changes are kept.
+export const settingsStore = createStore(sanitizeSettings({ ...savedSettings,
+  ...(savedSettings?.teamCombatV1 !== true ? { combatMetrics: true } : {}) }));
+savePref('settings', { ...settingsStore.get(), teamCombatV1: true });
 
 /**
  * 设置 →「文字大小」: put the step on <html data-text> — css/theme.css turns it into the text root `--t`
@@ -72,7 +77,7 @@ export function applyTextSize(v) {
 }
 
 settingsStore.subscribe((s) => {
-  savePref('settings', sanitizeSettings(s));
+  savePref('settings', { ...sanitizeSettings(s), teamCombatV1: true });
   audio.setVolumes(s);
   audio.setVoiceLang(s.voiceLang, s.voiceOverrides);
   audio.setVoiceNative(s.voiceNative);
@@ -502,7 +507,7 @@ export function SettingsModal({ open, onClose }) {
       <${Toggle} label=${t('显示弹药与能量数量')} micro="AMMO & ENERGY" value=${s.ammoEnergyCount} onChange=${(v) => updateSettings({ ammoEnergyCount: v })} />
       <p class="set-hint">${t('弹药类技能开启时，在弹药条下方显示剩余弹药 / 总弹药数（如 13/14）；秘术师的血条下方显示储存的攻击能量 / 上限（如 2/3）。官方界面没有这些数字。')}</p>
       <${Toggle} label=${t('作战统计')} micro="COMBAT STATS" value=${s.combatMetrics} onChange=${(v) => updateSettings({ combatMetrics: v })} />
-      <p class="set-hint">${t('打开后，对局左下角可以查看自己干员的伤害、治疗和 DPS / HPS。官方界面没有这个窗口。改变玩法的插件对局在 Worker 里演算，统计不到，按钮不显示。')}</p>
+        <p class="set-hint">${t('默认开启。战斗时点击全屏右侧的剑图标，查看所有玩家本回合的伤害、治疗与干员排行；切换视角不影响统计。')}</p>
       <p class="set-hint">${t('拖起干员、装备或召唤物，以及放下后选择朝向时，临时收起商店并放大棋盘。关闭后，拿起时既不改变商店的收起状态，也不缩放镜头。')}</p>
       <div class="set-row">
         <span class="set-row__label">${t('画面质量')}<${MicroLabel}>QUALITY<//></span>
@@ -532,6 +537,7 @@ export function SettingsModal({ open, onClose }) {
       <${CosmeticSection} />
       <${UiPluginSection} />
       <${StorageSection} />
+      <${PlayerProfileButton} />
       <${DiagSection} />
       <p class="set-hint">${touchUi ? t('触屏操作：点击单位选中（撤退 / 出售）· 长按单位或卡牌查看详情 · 拖动部署后滑动选择朝向') : t('右键查看详情')}</p>
     </div>

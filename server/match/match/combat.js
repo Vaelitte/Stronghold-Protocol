@@ -4,6 +4,8 @@
 // Installed on Match.prototype by server/match/Match.js (a method container: never instantiated; `this` is the match).
 
 import { PHASE, GEO } from '../../../shared/constants.js';
+import { trackCombat } from '../../../shared/combatMetrics.js';
+import { rememberDamageFields } from '../damage.js';
 import { deriveSeed } from '../../sim/rng.js';
 import { withBounties } from '../waves.js';
 import { planUnite } from '../unite.js';
@@ -18,7 +20,9 @@ export class MatchCombat {
     const full = { data: this.ds, content: this.battleContent, logger: this.log, ...opts, ...morphBattleOpt(this.rules),
       ...(preview ? { logger: {}, quiet: true } : {}) };
     try {
-      return new this.BattleClass(full);
+      const battle = new this.BattleClass(full);
+      if (!preview) battle.combatMetrics = trackCombat(battle);
+      return battle;
     } catch (e) {
       if (!preview) this.reportError(`battle ${opts.fieldId} construct`, e);
       return new DeadBattle(full, 'forced');
@@ -79,7 +83,9 @@ export class MatchCombat {
     this.phase = PHASE.COMBAT;
     const alive = this.alivePlayers();
     this.lastResults = new Map();
+    rememberDamageFields(this);
     this.fields = alive.map((ps) => ({ fieldId: `n:${ps.playerId}`, kind: 'normal', players: [ps.playerId], battle: this._normalBattle(ps), live: true }));
+    rememberDamageFields(this);
     const limit = this.wave ? this.wave.timeLimit : 60;
     this.deadline = this.sched.instant ? 0 : this.sched.now() + Math.round((limit / this.gameSpeed) * 1000);
     this._defaultWatch();

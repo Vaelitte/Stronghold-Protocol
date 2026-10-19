@@ -88,6 +88,7 @@ import { recordError, setBattleSource } from '../diag.js';
 import { loadBrowserSim } from './simLoader.js';
 import { InPageSimHost, WorkerSimHost } from './simHost.js';
 import { trackCombat, combineCombat } from './metrics.js';
+import { combatWire } from '../../../shared/combatMetrics.js';
 import { t } from '../../../shared/i18n.js';
 export { loadBrowserSim, SIM_DATA_FILES } from './simLoader.js';
 
@@ -197,6 +198,7 @@ export function createBattleRunner(deps) {
   const rememberCombat = (e) => {
     if (!e.combatMetrics) return;
     const record = e.combatMetrics();
+    record.round = e.spec?.round;
     if (!(combatHistory.get(e.battleId)?.seconds > record.seconds)) combatHistory.set(e.battleId, record);
   };
   // Opt-in (设置「作战统计」, default off). A boolean deps.combatMetrics pins a test and ignores setCombatMetrics.
@@ -490,6 +492,7 @@ export function createBattleRunner(deps) {
     e.meter = e.host.meter;
     const p = e.host.progress();
     const msg = { battleId: e.battleId, gt: Math.min(1e5, p.gt), killed: Math.min(p.killed, p.total), total: Math.min(1e5, p.total), done: !!p.done };
+    if (e.combatMetrics && force) msg.damage = combatWire(e.combatMetrics());
     // the HUD capsule's numerator of this field (shared/protocol.js b.progress `resolved`): the field's own scheduled
     // enemies knocked out or leaked. Sent only when the battle reports one (Battle.resolved) — an absent field leaves
     // the teammate UI on its `resolved ?? killed` fallback
@@ -810,7 +813,7 @@ export function createBattleRunner(deps) {
       e.meter = e.host.meter;
       // The Worker page holds wire state only (time, ids): no `damaged` hook and no `heal`, so trackCombat cannot
       // run there. An in-page Battle gets the meter only when 作战统计 is on (default off; a test may pin it).
-      if (metricsEnabled() && !e.host.remote) e.combatMetrics = trackCombat(battle);
+      if (metricsEnabled() && (!e.host.remote || e.host.packet?.combatMetrics)) e.combatMetrics = e.host.remote ? () => e.host.packet.combatMetrics : trackCombat(battle);
       e.t0 = clock() - (e.elapsed / e.speed) * 1000;
       if (lastPool) await e.host.syncPool(lastPool.hp, lastPool.acked ? lastPool.acked[e.fieldId] : undefined);
       if (e.endReason) await endBattle(e);
@@ -915,6 +918,14 @@ export function createBattleRunner(deps) {
   if (net && typeof net.on === 'function') {
     offs.push(net.on('b.start', (m) => { onStart(m).catch((err) => console.warn('[runner] b.start failed', err)); }));
     offs.push(net.on('b.pool', onPool));
+    offs.push(net.on('b.metricsQuery', (m) => {
+      const e = entries.get(m.battleId);
+      if (!e?.authoritative || !e.combatMetrics) return;
+      const record = e.combatMetrics();
+      if (!record) return;
+      try { net.send('b.metricsReport', { battleId: e.battleId, sampleId: m.sampleId,
+        gt: Math.min(1e5, record.seconds), damage: combatWire(record) }); } catch { /* reconnect will resume sampling */ }
+    }));
     offs.push(net.on('b.end', onEnd));
     // the session is back (reconnect / resume): results lost with the old socket go out again
     offs.push(net.on('status', (st) => { if (st && st.status === 'online') redeliver(); }));
@@ -969,7 +980,7 @@ export function createBattleRunner(deps) {
      * Read on demand by the panel — never sent to the server.
      * @param {{ scope?: 'battle'|'match', ownerId?: string|null }} [opts]
      */
-    combatMetrics({ scope = 'match', ownerId = null } = {}) {
+    combatMetrics({ scope = 'match', ownerId = null, round = null } = {}) {
       const localEntries = [...entries.values(), ...pending.values()];
       if (scope === 'battle') {
         // scouting another field must not replace the player's own current battle statistics
@@ -980,9 +991,10 @@ export function createBattleRunner(deps) {
       const records = new Map(combatHistory);
       for (const e of localEntries) if (e.combatMetrics) {
         const record = e.combatMetrics();
+        record.round = e.spec?.round;
         if (!(records.get(e.battleId)?.seconds > record.seconds)) records.set(e.battleId, record);
       }
-      return combineCombat(records.values(), ownerId);
+      return combineCombat([...records.values()].filter((r) => scope !== 'round' || r.round === round), ownerId);
     },
     /**
      * The battle on screen as a report attaches it (diag.js): its b.start fields and its game time; null without one.
