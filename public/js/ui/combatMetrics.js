@@ -51,7 +51,7 @@ export function CombatMetricsPanel({ onClose }) {
   const result = teamMetrics(snapshot?.round === pub?.round ? snapshot : null, scope);
   const own = myId && battleRunner?.combatMetrics({ scope: scope === 'match' ? 'match' : 'round', round: pub?.round, ownerId: myId });
   const remoteOwn = result.rows.filter((r) => r.ownerId === myId);
-  const rows = own?.rows.length && Math.max(...own.rows.map((r) => r.seconds)) >= Math.max(0, ...remoteOwn.map((r) => r.seconds))
+  const rows = own?.authoritative && own.rows.length && Math.max(...own.rows.map((r) => r.seconds)) >= Math.max(0, ...remoteOwn.map((r) => r.seconds))
     ? [...result.rows.filter((r) => r.ownerId !== myId), ...own.rows] : result.rows;
   const players = pub?.players || [];
   return html`<section id="combat-metrics-panel" class="combat-metrics combat-metrics--team brackets" role="dialog" aria-label=${t('作战统计')}

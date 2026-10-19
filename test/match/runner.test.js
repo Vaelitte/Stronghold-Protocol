@@ -135,10 +135,12 @@ test('authoritative battle: 2× pacing, ≤ max(8, 4·speed) ticks per frame, b.
   const hpDamage = e.battle.allyUnits.reduce((n, u) => n + u.stats.dmg, 0);
   assert.ok(Math.abs(metrics.damage - hpDamage) < 1e-6, 'local accounting matches unrounded simulation totals');
   const finalMetrics = structuredClone(metrics);
+  delete finalMetrics.authoritative;
+  const counts = () => Object.fromEntries(Object.entries(r.runner.combatMetrics()).filter(([key]) => key !== 'authoritative'));
   await r.runner.onStart(start);
-  assert.deepEqual(r.runner.combatMetrics(), finalMetrics, 'resending a finished battle does not count it twice');
+  assert.deepEqual(counts(), finalMetrics, 'resending a finished battle does not count it twice');
   r.store.patch('match', { public: { phase: PHASE.PREP, round: 3 } });
-  assert.deepEqual(r.runner.combatMetrics(), finalMetrics, 'match totals survive next-round prep');
+  assert.deepEqual(counts(), finalMetrics, 'match totals survive next-round prep');
   assert.equal(r.runner.combatMetrics({ scope: 'battle' }).rows.length, 0, 'current battle clears at prep');
   r.store.patch('match', { public: null });
   assert.equal(r.runner.combatMetrics().rows.length, 0, 'leaving the match clears totals');
@@ -669,6 +671,7 @@ test('fresh metric queries sample cumulative current values instead of replaying
   await r.settle();
   r.advance(1000, 50);
   assert.equal(r.net.sent.filter((m) => m.t === 'b.metricsReport').length, 0);
+  assert.equal(r.runner.combatMetrics({ scope: 'battle' }).authoritative, true);
   const sample = (sampleId) => {
     r.net.emit('b.metricsQuery', { battleId: start.battleId, sampleId });
     const msg = r.net.sent.at(-1);
@@ -685,6 +688,9 @@ test('fresh metric queries sample cumulative current values instead of replaying
   const second = sample('3.2');
   assert.ok(second.gt > first.gt);
   assert.equal(r.net.sent.filter((m) => m.t === 'b.metricsReport').length, 2, 'only the requested latest samples are sent');
+  r.runner._entries.get(start.battleId).authoritative = false;
+  assert.equal(r.runner.combatMetrics({ scope: 'battle' }).authoritative, false, 'a replica cannot replace a sampled authoritative counter');
+  assert.equal(r.runner.combatMetrics({ scope: 'match' }).authoritative, false);
   r.runner.dispose();
 });
 

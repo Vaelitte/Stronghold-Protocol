@@ -199,6 +199,7 @@ export function createBattleRunner(deps) {
     if (!e.combatMetrics) return;
     const record = e.combatMetrics();
     record.round = e.spec?.round;
+    record.authoritative = e.authoritative === true;
     if (!(combatHistory.get(e.battleId)?.seconds > record.seconds)) combatHistory.set(e.battleId, record);
   };
   // Opt-in (设置「作战统计」, default off). A boolean deps.combatMetrics pins a test and ignores setCombatMetrics.
@@ -986,15 +987,18 @@ export function createBattleRunner(deps) {
         // scouting another field must not replace the player's own current battle statistics
         const e = ownerId == null ? cur : localEntries.filter((entry) => entry.members.includes(ownerId))
           .sort((a, b) => b.seq - a.seq)[0];
-        return combineCombat(e?.combatMetrics ? [e.combatMetrics()] : [], ownerId);
+        return { ...combineCombat(e?.combatMetrics ? [e.combatMetrics()] : [], ownerId), authoritative: e?.authoritative === true };
       }
       const records = new Map(combatHistory);
       for (const e of localEntries) if (e.combatMetrics) {
         const record = e.combatMetrics();
         record.round = e.spec?.round;
+        record.authoritative = e.authoritative === true;
         if (!(records.get(e.battleId)?.seconds > record.seconds)) records.set(e.battleId, record);
       }
-      return combineCombat([...records.values()].filter((r) => scope !== 'round' || r.round === round), ownerId);
+      const selected = [...records.values()].filter((r) => (scope !== 'round' || r.round === round)
+        && (ownerId == null || r.owners.includes(ownerId)));
+      return { ...combineCombat(selected, ownerId), authoritative: selected.length > 0 && selected.every((r) => r.authoritative === true) };
     },
     /**
      * The battle on screen as a report attaches it (diag.js): its b.start fields and its game time; null without one.
