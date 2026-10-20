@@ -6,6 +6,7 @@ import { parseStoredOwnership } from './ui/ownershipModel.js';
 import { parseStoredDiy } from './ui/diyModel.js';
 import { setSkins } from './ui/skins.js';
 import { loadStats, mergeStats, saveStats } from './ui/stats.js';
+import { localProfileAction } from './directoryProfile.js';
 
 const keys = ['loadout', 'ownership', 'diy', 'skins', 'stats'];
 export const profileState = createStore({ status: 'idle', playerId: null });
@@ -84,8 +85,16 @@ export async function installProfileSync() {
 export async function exportPassport() {
   await flushProfile();
   if (profileState.get().status !== 'saved' || !token) throw new Error('Profile unavailable');
-  return { kind: 'stronghold-player-passport', v: 1, playerId: profileState.get().playerId,
-    token, name: identity.loadName(), prefs: Object.fromEntries(keys.map((k) => [k, loadPref(k, null)])) };
+  const snapshot = capturePassport();
+  if (!snapshot) throw new Error('Profile unavailable');
+  return snapshot;
+}
+/** Local snapshots also work when the server is temporarily unreachable. */
+export function capturePassport() {
+  const secret = identity.getToken(), playerId = profileState.get().playerId;
+  if (!secret || !playerId || secret !== token) return null;
+  return { kind: 'stronghold-player-passport', v: 1, playerId, token: secret, name: identity.loadName(),
+    revision, pending: dirty.size > 0 || !!saving, prefs: Object.fromEntries(keys.map(k => [k, loadPref(k, null)])) };
 }
 export async function retryProfile() {
   if (revision == null) {
@@ -95,16 +104,22 @@ export async function retryProfile() {
   }
   return flushProfile();
 }
-export async function importPassport(raw) {
+export async function restorePassport(raw, { local = false } = {}) {
   if (raw?.kind !== 'stronghold-player-passport' || raw.v !== 1 || !/^[0-9a-f]{32}$/.test(raw.token || '')
     || typeof raw.playerId !== 'string' || typeof raw.name !== 'string') throw new Error('Invalid passport');
-  const p = await api(raw.token);
+  let p = await api(raw.token);
   if (p.playerId !== raw.playerId) throw new Error('Wrong player');
   if (p.connected && identity.getToken() !== raw.token) throw Object.assign(new Error('Passport already active'), { code: 'passport-active' });
+  if (local && localProfileAction(raw, p) === 'local') {
+    p = await api(raw.token, 'PUT', { revision: p.revision, prefs: raw.prefs });
+  }
   applying = true;
   try { keys.forEach((k) => globalThis.localStorage?.removeItem(`sp.pref.${k}`)); }
   finally { applying = false; }
   apply(p);
   identity.saveName(raw.name); identity.saveToken(raw.token); identity.setEntered(true);
+}
+export async function importPassport(raw) {
+  await restorePassport(raw);
   location.reload();
 }

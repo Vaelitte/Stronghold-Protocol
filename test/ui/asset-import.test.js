@@ -464,6 +464,18 @@ test('a file the manifest does not list is skipped, and a bad zip stops the impo
   assert.equal(unsupported.get().phase, 'complete');
 });
 
+test('verified imports can write a portable directory without opening origin-specific Cache Storage', async () => {
+  const bytes = bytesOf('portable-png');
+  const view = rewriteManifest({ a: '/assets/a.png' }, 'assets.json', indexFor({ 'assets/a.png': hash16(bytes) }));
+  const stored = [];
+  const imp = createAssetImport({ fetch: manifestFetch(view.doc).fetch,
+    caches: { open: () => { throw new Error('must not use cache'); } }, storeAssets: async (urls, data) => stored.push({ urls, data }) });
+  await imp.start({ type: 'zip', data: buildZip([{ name: 'public/assets/a.png', raw: bytes }]) });
+  assert.equal(imp.get().phase, 'complete'); assert.equal(stored.length, 1); assert.deepEqual(stored[0].data, bytes);
+  await imp.start({ type: 'zip', data: buildZip([{ name: 'public/assets/a.png', raw: bytesOf('corrupt') }]) });
+  assert.equal(imp.get().rejected, 1); assert.equal(stored.length, 1);
+});
+
 test('cancel keeps bytes already accepted and does not store the file still being read', async () => {
   const a = bytesOf('file-a');
   const b = bytesOf('file-b');

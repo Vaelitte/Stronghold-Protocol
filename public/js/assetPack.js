@@ -579,6 +579,7 @@ const idleState = () => ({
 export function createAssetImport({
   fetch: doFetch = (...args) => globalThis.fetch(...args),
   caches: cachesApi = globalThis.caches,
+  storeAssets = null,
 } = {}) {
   let state = idleState();
   let phase = 'idle';
@@ -728,6 +729,7 @@ export function createAssetImport({
       };
 
       const store = async (urls, bytes) => {
+        if (storeAssets) { await storeAssets(urls, bytes); return; }
         if (!cache) {
           if (!cachesApi?.open) throw Object.assign(new Error('cache'), { code: 'unknown' });
           cache = await cachesApi.open(IMPORTED_ASSET_CACHE);

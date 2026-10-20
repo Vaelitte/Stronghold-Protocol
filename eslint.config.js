@@ -85,6 +85,11 @@ export default [
     rules,
   },
   {
+    files: ['public/local-sync-sw.js', 'public/bridge-sw.js'],
+    languageOptions: { ecmaVersion: 2024, sourceType: 'module', globals: { ...globals.serviceworker } },
+    rules,
+  },
+  {
     // The sim runs in every player's browser and on the server, and must give the same bits everywhere. ECMA-262
     // leaves these Math functions (and **) implementation-approximated: engines differ in the last bits.
     files: ['server/sim/**/*.js'],

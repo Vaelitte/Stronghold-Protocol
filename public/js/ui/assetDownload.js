@@ -51,9 +51,7 @@ export function AssetDownloadButton() {
       ${state.total > 0 ? html`<p>${t('已就绪 {ready}，缺少 {missing}', { ready, missing })}</p>` : null}
       <p class="t-lo">${t('已导入的素材直接使用，不再向服务器请求。')}</p>
       <p class="t-lo">${t('下载本服务器提供的素材到浏览器缓存。关闭窗口会暂停；缓存被清理后可再次下载。')}</p>
-      <p>${globalThis.document?.querySelector('meta[name="sp-relay-origin"]')
-        ? t('随机网址共用统一入口的素材缓存，已缓存的文件无需重新下载；首次使用、清理缓存或素材更新时仍需加载。')
-        : t('随机网址改变后，浏览器缓存不能直接共用。可保存离线素材包，换网址后点击“导入素材包”，选择同一个文件；导入过程不上传素材。')}</p>
+      <p>${t('跨随机网址保留素材：在“玩家档案与通行证 → 本地目录同步”连接目录，下载时自动保存。也可保存 ZIP，导入目录一次；换网址后重新选择目录即可复用。')}</p>
       <a class="btn btn--secondary" href="/offline-assets.zip" download="Stronghold-assets.zip">${t('保存离线素材包（跨网址复用）')}</a>
       <p class="t-lo">${t('包含本服提供的基础模型、贴图、地图、字体及音频；外观插件另带的皮肤素材不在基础清单中。')}</p>
       ${state.localMissing ? html`<p class="t-lo">${t('服务器未提供额外的本地素材包，将使用基础素材。')}</p>` : null}

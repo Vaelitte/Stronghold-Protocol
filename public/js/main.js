@@ -35,6 +35,7 @@
 // Polyfills first (older Safari / Firefox ESR): every module evaluated after this one sees them.
 import './ui/compat.js';
 import { installProfileSync } from './profileSync.js';
+import { restoreRememberedDirectory, installDirectorySync } from './localDirectorySync.js';
 import { render } from '../vendor/preact.module.js';
 import { useErrorBoundary } from '../vendor/hooks.module.js';
 import { html, UiHosts, Button, MicroLabel, closeAllDialogs } from './ui/components.js';
@@ -383,7 +384,11 @@ async function boot() {
   // A page restored from the back/forward cache has a dead socket and a stale token choice: start over.
   window.addEventListener('pageshow', (ev) => { if (ev.persisted) location.reload(); });
   // Pick this tab's reconnect token (asks other live tabs; ≤150 ms) while fonts load.
-  const identityReady = identity.init().then(() => installProfileSync());
+  const identityReady = identity.init().then(async () => {
+    await restoreRememberedDirectory();
+    await installProfileSync();
+    installDirectorySync();
+  });
 
   const pendingJoin = parseRoomParam(location.search);
   const savedName = sanitizeName(identity.loadName());

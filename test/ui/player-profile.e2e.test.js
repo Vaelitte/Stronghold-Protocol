@@ -37,12 +37,15 @@ test('passport restores the same ID, loadout, ownership, DIY, skins and history 
     const id = passport.playerId;
     target = new Client(P, srv.base.replace('127.0.0.1', 'localhost'), 'profile-restored', { prefix: 'player-profile', w: 1280, h: 800 });
     await target.open();
+    // The fallback passport flow must work with the classic worker, which has no directory message listener.
+    await target.page.evaluate(async () => { await navigator.serviceWorker.register('/sw.js', { scope: '/' }); });
+    await target.page.waitForFunction(() => navigator.serviceWorker.controller?.scriptURL.endsWith('/sw.js'));
     await target.click('.player-profile button', '玩家档案与通行证');
-    await target.page.waitForSelector('.player-profile input[type="file"]');
-    await (await target.page.$('.player-profile input[type="file"]')).uploadFile(file);
+    await target.page.waitForSelector('.player-profile input[accept^=".json"]');
+    await (await target.page.$('.player-profile input[accept^=".json"]')).uploadFile(file);
     await target.page.waitForFunction(() => document.querySelector('.player-profile [role="alert"]')?.textContent.includes('请先关闭'));
     await source.close(); source = null;
-    await (await target.page.$('.player-profile input[type="file"]')).uploadFile(file);
+    await (await target.page.$('.player-profile input[accept^=".json"]')).uploadFile(file);
     await target.page.waitForFunction((id) => globalThis.__SP__?.store.get().me.playerId === id, { timeout: 20000 }, id);
     const restored = await target.page.evaluate(async () => {
       const l = (await import('/js/ui/loadoutSync.js')).loadoutStore.get();

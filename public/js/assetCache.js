@@ -54,8 +54,10 @@ export function importSupport(nav = globalThis.navigator, secure = globalThis.is
  */
 export function registerImportedAssetWorker(nav = globalThis.navigator, secure = globalThis.isSecureContext) {
   if (!secure || !nav?.serviceWorker?.register) return Promise.resolve(false);
-  const bridge = globalThis.document?.querySelector?.('meta[name="sp-relay-origin"]');
-  return nav.serviceWorker.register(bridge ? '/bridge-sw.js' : '/sw.js', { scope: '/', updateViaCache: 'none' }).then(() => true, () => false);
+  const directory = typeof globalThis.showDirectoryPicker === 'function';
+  return nav.serviceWorker.register(directory ? '/local-sync-sw.js' : '/sw.js', {
+    scope: '/', updateViaCache: 'none', ...(directory ? { type: 'module' } : {}),
+  }).then(() => true, () => false);
 }
 
 /** Content-Type stored with an imported response, chosen from the URL the game will request. */

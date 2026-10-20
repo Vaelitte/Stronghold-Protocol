@@ -23,7 +23,6 @@
 //   installRehearsal({ net, runner, createWorker, log }) → { pending(), clear(), dispose() } | null   (wired in main.js)
 
 import { battleRunner } from './runner.js';
-import { relayWorkerUrl } from '../browserTransport.js';
 
 /** The module Worker that simulates the candidates (public/ is served at the root). */
 export const WORKER_URL = '/js/battle/rehearsalWorker.js';
@@ -46,7 +45,7 @@ export function rehearsalSpecsAreOfficial(specs) {
  *   (default: the browser singleton; its `ensureSim()` warms and caches it), `createWorker` = the Worker factory (tests)
  * @returns {null | { pending: () => number, clear: () => void, dispose: () => void }} null without a socket, or in Node
  */
-export function installRehearsal({ net, runner = battleRunner, createWorker = () => new Worker(relayWorkerUrl(new URL(WORKER_URL, location.origin)), { type: 'module' }), log = console } = {}) {
+export function installRehearsal({ net, runner = battleRunner, createWorker = () => new Worker(new URL(WORKER_URL, location.origin), { type: 'module' }), log = console } = {}) {
   if (!net || typeof net.on !== 'function' || !runner || typeof runner.ensureSim !== 'function') return null;
   /** The tasks waiting for the worker, oldest first. */
   const queue = [];
