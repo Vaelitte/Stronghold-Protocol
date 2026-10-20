@@ -2,15 +2,15 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Client, startRealServer, hasChrome, sleep } from '../e2e/client.mjs';
 
-test('one human with three AI teammates: AI metrics advance during battle and the individual/unite tabs remain separate', {
-  skip: !(process.env.SP_E2E === '1' && hasChrome()), timeout: 120000,
+test('one human with three AI teammates: live AI metrics automatically follow the current battle from individual to unite', {
+  skip: !(process.env.SP_E2E === '1' && hasChrome()), timeout: 180000,
 }, async () => {
   let srv, host;
   const previous = process.env.SP_COMBAT;
   process.env.SP_COMBAT = 'client';
   try {
-    srv = await startRealServer({ fast: { startRound: 3, timerScale: 0.3, combatSpeed: 0.5,
-      kit: 4, botChess: ['chess_char_1_01_a', 'chess_char_1_03_a', 'chess_char_1_10_a'], idleBots: true, autoPlace: true } });
+    srv = await startRealServer({ fast: { startRound: 3, timerScale: 0.3, combatSpeed: 2,
+      kit: 0, botChess: ['chess_char_1_01_a', 'chess_char_1_03_a', 'chess_char_1_10_a'], idleBots: true, autoPlace: true } });
     const P = (await import('puppeteer-core')).default;
     host = new Client(P, srv.base, 'three-ai', { prefix: 'three-ai', w: 1280, h: 800 });
     await host.open(); await host.enter('三AI验收');
@@ -47,10 +47,26 @@ test('one human with three AI teammates: AI metrics advance during battle and th
       });
     }, { timeout: 25000 });
     assert.equal(await host.page.$$eval('.combat-metrics__player', (els) => els.length), 4);
-    await host.click('.combat-metrics__scopes button', '联防');
-    assert.ok(await host.page.$$eval('.combat-metrics__player .combat-metrics__totals b', (els) => els.every((e) => e.textContent === '0')));
-    await host.click('.combat-metrics__scopes button', '个人战斗');
+    assert.deepEqual(await host.page.$$eval('.combat-metrics__scopes button', els => els.map(e => e.textContent)), ['当前战斗', '本局累计']);
     await host.shot('three-ai-live');
+    await host.waitFor(s => s.phase === 'UNITE', 'unite after the empty human board leaks', 90000);
+    await host.page.waitForFunction(() => {
+      const sample = globalThis.__aiSamples.at(-1);
+      if (sample?.combatKind !== 'unite' || sample.combatStages.normal.damage <= 0) return false;
+      const shown = [...document.querySelectorAll('.combat-metrics__player .combat-metrics__totals > span:first-child b')]
+        .reduce((sum, e) => sum + Number(e.textContent.replace(/,/g, '')), 0);
+      return Math.abs(shown - sample.combat.damage) <= 2 && sample.combat.damage === sample.combatStages.unite.damage;
+    }, { timeout: 20000 });
+    assert.deepEqual(await host.page.$$eval('.combat-metrics__scopes button', els => els.map(e => e.textContent)), ['当前战斗', '本局累计']);
+    await host.click('.combat-metrics__scopes button', '本局累计');
+    await host.page.waitForFunction(() => {
+      const sample = globalThis.__aiSamples.at(-1);
+      const shown = [...document.querySelectorAll('.combat-metrics__player .combat-metrics__totals > span:first-child b')]
+        .reduce((sum, e) => sum + Number(e.textContent.replace(/,/g, '')), 0);
+      return sample?.combatKind === 'unite' && sample.combatMatch.damage > sample.combat.damage && Math.abs(shown - sample.combatMatch.damage) <= 2;
+    }, { timeout: 10000 });
+    await host.click('.combat-metrics__scopes button', '当前战斗');
+    await host.shot('three-ai-unite');
     assert.deepEqual(host.problems.filter((p) => p.startsWith('pageerror:')), []);
   } catch (e) { if (host?.page) await host.shot('failure'); throw e; }
   finally {

@@ -52,9 +52,7 @@ test('real four-player combat: team columns, both scopes, latest sampling interv
     }
     await host.page.waitForFunction(() => globalThis.__teamSamples.some((m) => m.damage > 0 && !m.pending.length), { timeout: 20000 });
     assert.equal(await host.page.$eval('.combat-metrics__scopes button[aria-pressed="true"]', (e) => e.textContent), '当前战斗');
-    await host.click('.combat-metrics__scopes button', '联防');
-    assert.equal(await host.page.$$eval('.combat-metrics__player .combat-metrics__totals b', (els) => els.every((e) => e.textContent === '0')), true);
-    await host.click('.combat-metrics__scopes button', '个人战斗');
+    assert.deepEqual(await host.page.$$eval('.combat-metrics__scopes button', els => els.map(e => e.textContent)), ['当前战斗', '本局累计']);
     await host.page.waitForFunction(() => {
       const samples = globalThis.__teamSamples;
       const bots = globalThis.__SP__.store.get().match.public.players.filter((p) => p.isBot).map((p) => p.playerId);

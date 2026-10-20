@@ -14,14 +14,12 @@ export function teamMetrics(snapshot, scope = 'battle', kind = null) {
   return (scope === 'battle' ? (kind && snapshot?.combatStages ? snapshot.combatStages[kind] : snapshot?.combat) : snapshot?.combatMatch) || { rows: [], damage: 0, healing: 0 };
 }
 const stageFor = (phase) => ({ UNITE: 'unite', FINAL_ASSAULT: 'boss', HIDDEN_CORE: 'hidden' })[phase] || 'normal';
-const STAGES = [['normal', N_('个人战斗')], ['unite', N_('联防')], ['boss', N_('首领战')], ['hidden', N_('隐藏首领')]];
 /** Expanded existing combat panel: one column per player, independent of the watched field. */
 export function CombatMetricsPanel({ onClose }) {
   const pub = useStore((s) => s.match.public);
   const myId = useStore((s) => s.me.playerId);
   const [scope, setScope] = useState('battle');
-  const [kind, setKind] = useState(() => stageFor(pub?.phase));
-  useEffect(() => { setKind(stageFor(pub?.phase)); }, [pub?.round, pub?.phase]);
+  const kind = stageFor(pub?.phase);
   const intervals = [500, 1000, 2000, 3000, 5000, 10000];
   const [intervalMs, setIntervalMs] = useState(() => {
     const saved = loadPref('combatMetricsInterval', 1000);
@@ -43,7 +41,7 @@ export function CombatMetricsPanel({ onClose }) {
     const timer = setInterval(poll, intervalMs);
     document.addEventListener('visibilitychange', poll);
     return () => { clearInterval(timer); off(); document.removeEventListener('visibilitychange', poll); };
-  }, [intervalMs, pub?.round]);
+  }, [intervalMs, pub?.round, kind]);
   const closeRef = useRef(null);
   useEffect(() => {
     const previous = document.activeElement;
@@ -66,10 +64,6 @@ export function CombatMetricsPanel({ onClose }) {
       <div class="combat-metrics__tools"><div class="combat-metrics__scopes" role="group" aria-label=${t('统计范围')}>
         ${[['battle', t('当前战斗')], ['match', t('本局累计')]].map(([id, label]) => html`<button type="button" key=${id} aria-pressed=${scope === id} onClick=${() => setScope(id)}>${label}</button>`)}
       </div></div>
-      ${scope === 'battle' ? html`<div class="combat-metrics__scopes" role="group" aria-label=${t('战斗阶段')}>
-        ${STAGES.filter(([id]) => id === kind || (id === 'normal' || id === 'unite') && !['FINAL_ASSAULT', 'HIDDEN_CORE'].includes(pub?.phase)
-          || snapshot?.combatStages?.[id]?.rows.length).map(([id, label]) => html`<button type="button" key=${id} aria-pressed=${kind === id} onClick=${() => setKind(id)}>${t(label)}</button>`)}
-      </div>` : null}
       <label class="combat-metrics__frequency">${t('队友数据更新间隔：{seconds} 秒', { seconds: intervalMs / 1000 })}
         <input type="range" min="0" max="5" step="1" value=${intervals.indexOf(intervalMs)} aria-label=${t('队友数据更新间隔')}
           onInput=${(e) => { const v = intervals[Number(e.target.value)]; setIntervalMs(v); savePref('combatMetricsInterval', v); }} />
