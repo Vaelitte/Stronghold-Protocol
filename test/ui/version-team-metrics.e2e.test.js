@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Client, hasChrome } from '../e2e/client.mjs';
 
-test('historical version host forwards live counters for the human and three AI teammates', {
+test('historical version host forwards fresh team samples for the human and three AI teammates', {
   skip: !(process.env.SP_E2E === '1' && hasChrome()), timeout: 120000,
 }, async () => {
   const { startServer } = await import('../../server/index.js');
@@ -33,8 +33,10 @@ test('historical version host forwards live counters for the human and three AI 
     await host.click('.gm__metrics');
     await host.page.waitForFunction(() => {
       const samples = globalThis.__versionSamples;
-      return samples.length > 1 && samples.at(-1).combat.rows.length > 0
-        && samples.some(s => s.combat.seconds < samples.at(-1).combat.seconds);
+      // A randomly drawn first wave may end before two polls. Fresh IDs prove this is a new authority read,
+      // even if its correct total is zero or already final; growth is covered by three-ai-metrics.e2e.test.js.
+      return samples.length > 1 && samples.some(s => s.sampleId !== samples.at(-1).sampleId)
+        && Array.isArray(samples.at(-1).combat.rows) && Number.isFinite(samples.at(-1).combat.damage);
     }, { timeout: 25000 });
     assert.equal(await host.page.$$eval('.combat-metrics__player', es => es.length), 4);
     assert.deepEqual(await host.page.$$eval('.combat-metrics__scopes button', es => es.map(e => e.textContent)), ['当前战斗', '本局累计']);
