@@ -138,6 +138,8 @@ describe('views already drawn follow a changed manifest (render/units.js retryAs
     const v = unit(a);
     a.onChange(() => v.retryAssets());
     await settle();
+    await a.image(PLUGIN_AVATAR); // wait for the personal deployment's bounded image retries to finish
+    await settle();
     assert.deepEqual(loads, [PLUGIN_SKEL, vanilla], 'the plugin model first, then the installation\'s');
     assert.equal(v._actorEntry?.skel, vanilla);
     assert.deepEqual(layers.failed.sort(), [PLUGIN_AVATAR, PLUGIN_SKEL].sort(), 'both reported by the store');

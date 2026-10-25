@@ -49,7 +49,9 @@ test('HTTP profiles require the secret, reject stale writes, and survive a serve
     assert.equal((await fetch(route())).status, 401);
     let p = await fetch(route(), { headers }).then((r) => r.json());
     assert.equal(p.playerId, session.playerId);
-    const prefs = { stats: { v: 2, records: [] }, diy: { v: 1, picks: {} } };
+    const prefs = { stats: { v: 2, records: [] }, diy: { v: 1, picks: {} },
+      'diy.act1autochess': { v: 1, picks: {} }, 'diy.act1autochess-v1_1': { v: 1, picks: {} },
+      'diy.act2autochess-v2_1': { v: 1, picks: { diy1: { charId: 'char_test' } } } };
     assert.equal((await fetch(route(), { method: 'PUT', headers, body: JSON.stringify({ revision: p.revision, prefs }) })).status, 200);
     assert.equal((await fetch(route(), { method: 'PUT', headers, body: JSON.stringify({ revision: p.revision, prefs: { stats: null } }) })).status, 409);
     await srv.close(); srv = await startServer(options);

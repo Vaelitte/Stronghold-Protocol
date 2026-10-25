@@ -60,6 +60,9 @@ test('sample timeout is explicit; stale reports, invalid numbers and oversized r
   assert.equal(m.damageSample.waiting.size, 2);
   const msg = { t: 'b.metricsReport', sampleId: '3.1', battleId: 'p1', gt: 10, damage: [row('p1', 50)] };
   assert.equal(validateC2S(msg), null);
+  const picture = { charId: 'char_test', isGolden: true, assets: { avatar: 'char_test_2' } };
+  assert.equal(validateC2S({ ...msg, damage: [{ ...row('p1', 50), picture }] }), null);
+  assert.ok(validateC2S({ ...msg, damage: [{ ...row('p1', 50), picture: { ...picture, assets: { avatar: 'https://example.com/private.png' } } }] }));
   assert.ok(validateC2S({ ...msg, damage: [row('p1', -1)] }));
   assert.ok(validateC2S({ ...msg, damage: Array(129).fill(row('p1', 0)) }));
 });

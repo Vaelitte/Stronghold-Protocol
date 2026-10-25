@@ -1,14 +1,11 @@
 import { net, identity } from './net.js';
 import { createStore, loadPref, savePref } from './store.js';
-import { loadoutStore } from './ui/loadoutSync.js';
-import { parseStored, parseStoredOps } from './ui/loadoutModel.js';
-import { parseStoredOwnership } from './ui/ownershipModel.js';
-import { parseStoredDiy } from './ui/diyModel.js';
+import { restoreLoadoutPreferences } from './ui/loadoutSync.js';
 import { setSkins } from './ui/skins.js';
 import { loadStats, mergeStats, saveStats } from './ui/stats.js';
 import { localProfileAction } from './directoryProfile.js';
+import { PROFILE_KEYS as keys } from '../../shared/profileKeys.js';
 
-const keys = ['loadout', 'ownership', 'diy', 'skins', 'stats'];
 export const profileState = createStore({ status: 'idle', playerId: null });
 let revision = null, token = null, applying = false, timer = null, saving = null;
 const dirty = new Set();
@@ -26,8 +23,7 @@ function apply(p) {
       if (k === 'stats') saveStats(mergeStats(loadStats(), p.prefs.stats));
       else savePref(k, p.prefs[k]);
     }
-    loadoutStore.set({ entries: parseStored(loadPref('loadout', null)), ops: parseStoredOps(loadPref('loadout', null)),
-      notOwned: parseStoredOwnership(loadPref('ownership', null)), diy: parseStoredDiy(loadPref('diy', null)) });
+    restoreLoadoutPreferences();
     setSkins(loadPref('skins', {}));
   } finally { applying = false; }
 }

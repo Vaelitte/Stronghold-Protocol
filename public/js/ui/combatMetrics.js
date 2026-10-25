@@ -86,7 +86,8 @@ export function CombatMetricsPanel({ onClose }) {
           <ol class="combat-metrics__list" tabindex="0" aria-label=${t('干员伤害排行')}>
             ${playerRows.length ? playerRows.map((r, i) => html`<li key=${r.key} class="combat-metrics__row">
               <span class="combat-metrics__rank">${i + 1}</span>
-              <${UnitThumb} kind=${r.kind === 'token' ? 'token' : 'chess'} id=${r.defId} showTier=${false} size="sm" />
+              <${UnitThumb} kind=${r.kind === 'token' ? 'token' : 'chess'} id=${r.defId} ownerId=${r.ownerId}
+                rec=${r.picture?.charId ? { ...r.picture, name: r.name } : null} showTier=${false} size="sm" />
               <div class="combat-metrics__unit"><div class="combat-metrics__name"><b title=${r.name}>${r.name || r.defId}</b></div>
                 <div class="combat-metrics__bar" role="img" aria-label=${t('总伤害')} title=${TYPES.map((x) => `${t(x.label)} ${number(r.types[x.id])}`).join(' / ')}>
                   ${TYPES.map((x) => html`<span key=${x.id} class=${`combat-metrics__segment combat-metrics__segment--${x.id}`} style=${{ width: `${(r.types[x.id] || 0) / maximum * 100}%` }}></span>`)}

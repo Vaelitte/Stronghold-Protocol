@@ -32,6 +32,7 @@ export function trackCombat(battle, { timeline = false } = {}) {
     if (!rows.has(key)) {
       rows.set(key, {
       key, ownerId: u.ownerId, uid: u.uid, defId: u.defId, name: u.name, kind: u.kind,
+      picture: { charId: u.def?.charId, isGolden: !!u.def?.golden, assets: { avatar: u.def?.avatar ?? u.def?.charId } },
       damage: 0, healing: 0, types: Object.fromEntries(DAMAGE_TYPES.map((t) => [t, 0])),
       });
       remember(rows.get(key));
@@ -109,6 +110,8 @@ export function combatWire(record) {
     ownerId: r.ownerId, defId: r.defId, name: String(r.name || r.defId).slice(0, 128), kind: r.kind,
     damage: Math.min(1e15, r.damage), healing: Math.min(1e15, r.healing),
     types: Object.fromEntries(DAMAGE_TYPES.map((t) => [t, Math.min(1e15, r.types[t] || 0)])),
+    ...(r.picture?.charId ? { picture: { charId: r.picture.charId, isGolden: !!r.picture.isGolden,
+      assets: { avatar: r.picture.assets?.avatar || r.picture.charId } } } : {}),
   }));
 }
 
@@ -129,7 +132,7 @@ export function combineCombat(records, ownerId = null) {
         rows.set(key, row);
       }
       // Use the latest encountered definition for the combined row's portrait.
-      Object.assign(row, { defId: r.defId, name: r.name, kind: r.kind });
+      Object.assign(row, { defId: r.defId, name: r.name, kind: r.kind, picture: r.picture });
       row.damage += r.damage;
       row.healing += r.healing;
       for (const t of DAMAGE_TYPES) row.types[t] += r.types[t] || 0;

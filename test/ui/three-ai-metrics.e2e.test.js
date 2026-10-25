@@ -14,9 +14,7 @@ test('one human with three AI teammates: live AI metrics automatically follow th
     const P = (await import('puppeteer-core')).default;
     host = new Client(P, srv.base, 'three-ai', { prefix: 'three-ai', w: 1280, h: 800 });
     await host.open(); await host.enter('三AI验收');
-    await host.click('.mode-card', '同盟模拟'); await host.click('.diff-card', '标准模拟');
-    await host.click('.create-box button', '创建同盟');
-    await host.waitFor((s) => !!s.room?.code, 'room');
+    await host.createCoop('标准模拟');
     for (let i = 0; i < 3; i++) { await host.click('button', '添加 AI 队友'); await sleep(150); }
     await host.click('.room-bar__right button', '开始模拟');
     await host.waitFor((s) => s.phase === 'INFO_CHECK', 'briefing');

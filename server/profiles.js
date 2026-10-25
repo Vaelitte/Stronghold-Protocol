@@ -2,9 +2,10 @@
 import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync, renameSync, existsSync } from 'node:fs';
 import path from 'node:path';
+import { PROFILE_KEYS as profileKeys } from '../shared/profileKeys.js';
 
 const hash = (token) => createHash('sha256').update(token).digest('hex');
-export const PROFILE_KEYS = new Set(['loadout', 'ownership', 'diy', 'skins', 'stats']);
+export const PROFILE_KEYS = new Set(profileKeys);
 export const PROFILE_MAX_BYTES = 3 * 1024 * 1024;
 export class ProfileStore {
   constructor(dir) { this.dir = path.resolve(dir); }

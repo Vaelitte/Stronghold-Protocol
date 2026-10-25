@@ -16,9 +16,7 @@ test('real four-player combat: team columns, both scopes, latest sampling interv
     host = new Client(P, srv.base, 'team-host', { prefix: 'team-combat', w: 1280, h: 800 });
     guest = new Client(P, srv.base, 'team-guest', { prefix: 'team-combat-guest', w: 1280, h: 800 });
     await host.open(); await host.enter('统计博士');
-    await host.click('.mode-card', '同盟模拟'); await host.click('.diff-card', '标准模拟');
-    await host.click('.create-box button', '创建同盟');
-    const code = (await host.waitFor((s) => !!s.room?.code, 'room')).room.code;
+    const code = (await host.createCoop('标准模拟')).code;
     for (let i = 0; i < 2; i++) { await host.click('button', '添加 AI 队友'); await sleep(300); }
     await guest.open(`?room=${code}`); await guest.enter('队友博士');
     await guest.waitFor((s) => s.room?.code === code, 'joined');
